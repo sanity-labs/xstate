@@ -1,0 +1,68 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "typeAware": true,
+    "typeCheck": true,
+    "denyWarnings": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "ignorePatterns": ["**/dist", ".agents/skills", ".claude/skills"],
+  "plugins": ["react", "unicorn", "typescript", "oxc", "import", "node"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "error"
+  },
+  "rules": {
+    "typescript/ban-ts-comment": "error",
+    "typescript/prefer-ts-expect-error": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-deprecated": "error",
+    "typescript/no-explicit-any": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/no-unnecessary-type-assertion": "off",
+    "react-in-jsx-scope": "off",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/jsx-key": "error",
+    "react/unsupported-syntax": "error",
+    "react/invariant": "error",
+    "react/rule-suppression": "error",
+    "react/syntax": "error",
+    "react/todo": "error",
+    "eslint/no-console": [
+      "error",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    "eslint/no-shadow": "off",
+    "consistent-return": "off",
+    "eslint/no-underscore-dangle": "off"
+  },
+  "overrides": [
+    {
+      "files": ["packages/xstate-react/src/index.ts"],
+      "rules": {
+        "typescript/no-deprecated": "off"
+      }
+    },
+    {
+      "files": ["packages/xstate-react/src/__tests__/upstream/**"],
+      "rules": {
+        "typescript/no-deprecated": "off",
+        "typescript/ban-ts-comment": "off",
+        "typescript/no-floating-promises": "off",
+        "typescript/no-useless-default-assignment": "off",
+        "typescript/no-unnecessary-type-conversion": "off",
+        "typescript/no-unsafe-class-instance-assignment": "off",
+        "react/rules-of-hooks": "off",
+        "react/exhaustive-deps": "off",
+        "react/no-object-type-as-default-prop": "off",
+        "import/no-named-as-default": "off",
+        "unicorn/consistent-function-scoping": "off",
+        "eslint/no-unused-vars": "off"
+      }
+    }
+  ]
+}
