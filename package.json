@@ -1,0 +1,31 @@
+{
+  "name": "xstate-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Sanity.io <hello@sanity.io>",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @sanity-labs/xstate-react build",
+    "changeset": "changeset",
+    "format": "oxfmt && pnpm lint --fix",
+    "knip": "knip --no-config-hints",
+    "lint": "oxlint",
+    "release": "changeset publish",
+    "test": "pnpm --filter @sanity-labs/xstate-react test",
+    "watch": "pnpm --filter @sanity-labs/xstate-react watch"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
+    "knip": "^6.48.0",
+    "oxfmt": "^0.80.0",
+    "oxlint": "^1.95.0",
+    "oxlint-tsgolint": "^7.0.2009",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
+  "packageManager": "pnpm@12.23.0"
+}

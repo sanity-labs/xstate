@@ -1,0 +1,237 @@
+import {act, render, screen} from '@testing-library/react'
+import {
+  addTransitionType,
+  createContext,
+  startTransition,
+  Suspense,
+  use,
+  useLayoutEffect,
+  useTransition,
+  ViewTransition,
+  type ReactNode,
+} from 'react'
+import {describe, expect, it} from 'vitest'
+import {createActor} from 'xstate'
+
+import {useActor, useActorRef, useSelector, useSend, type Updates} from '../index'
+import {counterMachine, deferred, recordViewTransitionTypes} from './helpers'
+
+function Gate({count, gate}: {count: number; gate: Promise<void>}) {
+  if (count > 0) {
+    use(gate)
+  }
+  return <p data-testid="count">{count}</p>
+}
+
+function setup(gate: Promise<void>, updates?: Updates) {
+  let send!: ReturnType<typeof useActor<typeof counterMachine>>[1]
+  let actor!: ReturnType<typeof useActor<typeof counterMachine>>[2]
+  let isPending = false
+  function App() {
+    const [snapshot, _send, _actor] = useActor(counterMachine, {updates})
+    const [pending] = useTransition()
+    useLayoutEffect(() => {
+      send = _send
+      actor = _actor
+      isPending = pending
+    })
+    return (
+      <Suspense fallback={<p data-testid="fallback" />}>
+        <ViewTransition>
+          <Gate count={snapshot.context.count} gate={gate} />
+        </ViewTransition>
+      </Suspense>
+    )
+  }
+  render(<App />)
+  return {
+    send: (...args: Parameters<typeof send>) => send(...args),
+    get actor() {
+      return actor
+    },
+    isPending: () => isPending,
+  }
+}
+
+describe('xstate 6.0.0-beta.5', () => {
+  it('notifies subscribers before `actor.send()` returns', () => {
+    const actor = createActor(counterMachine).start()
+    const seen: number[] = []
+    actor.subscribe((snapshot) => seen.push(snapshot.context.count))
+    actor.send({type: 'inc'})
+    expect(seen).toEqual([1])
+  })
+})
+
+describe('send', () => {
+  const types = recordViewTransitionTypes()
+
+  it('joins the transition it is called in, keeping the content while the next state suspends', async () => {
+    const gate = deferred()
+    const {send} = setup(gate.promise)
+
+    await act(async () => {
+      startTransition(() => {
+        addTransitionType('increment')
+        send({type: 'inc'})
+      })
+    })
+    expect(screen.getByTestId('count').textContent).toBe('0')
+    expect(screen.queryByTestId('fallback')).toBeNull()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('count').textContent).toBe('1')
+    expect(types).toContainEqual(['increment'])
+  })
+
+  it('keeps the outer transition types when it starts a transition of its own', async () => {
+    const gate = deferred()
+    gate.resolve()
+    const {send} = setup(gate.promise)
+
+    await act(async () => {
+      startTransition(() => {
+        addTransitionType('outer')
+        startTransition(() => send({type: 'inc'}))
+      })
+    })
+    expect(screen.getByTestId('count').textContent).toBe('1')
+    expect(types).toEqual([['outer']])
+  })
+
+  it('previews an urgent send while the snapshot itself updates in a transition', async () => {
+    const gate = deferred()
+    const {send} = setup(gate.promise)
+
+    await act(async () => send({type: 'inc'}))
+    // The urgent preview suspends like any urgent update would.
+    expect(screen.getByTestId('fallback')).toBeTruthy()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('count').textContent).toBe('1')
+  })
+
+  it('needs `startTransition` again after `await`, like any update in an async action', async () => {
+    const gate = deferred()
+    const {send, isPending} = setup(gate.promise)
+    const loaded = deferred()
+
+    let action!: Promise<void>
+    await act(async () => {
+      startTransition(() => {
+        action = (async () => {
+          await loaded.promise
+          startTransition(() => {
+            addTransitionType('after-await')
+            send({type: 'inc'})
+          })
+        })()
+        return action
+      })
+    })
+    await act(async () => {
+      loaded.resolve()
+      await action
+    })
+    expect(screen.getByTestId('count').textContent).toBe('0')
+    expect(screen.queryByTestId('fallback')).toBeNull()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('count').textContent).toBe('1')
+    expect(isPending()).toBe(false)
+    expect(types).toContainEqual(['after-await'])
+  })
+
+  it('is urgent after `await` without `startTransition`, like `setState`', async () => {
+    const gate = deferred()
+    const {send} = setup(gate.promise)
+
+    let action!: Promise<void>
+    await act(async () => {
+      startTransition(() => {
+        action = (async () => {
+          await Promise.resolve()
+          send({type: 'inc'})
+        })()
+        return action
+      })
+      await action
+    })
+    expect(screen.getByTestId('fallback')).toBeTruthy()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('count').textContent).toBe('1')
+  })
+
+  it('makes every reader of the actor update in the same transition', async () => {
+    const ActorContext = createContext(createActor(counterMachine))
+    const gate = deferred()
+    let send!: (event: {type: 'inc'}) => void
+    function Reader({gate}: {gate?: Promise<void>}) {
+      const actor = use(ActorContext)
+      const count = useSelector(actor, (snapshot) => snapshot.context.count)
+      if (gate && count > 0) {
+        use(gate)
+      }
+      return <span>{count}</span>
+    }
+    function Provider({children}: {children: ReactNode}) {
+      const actor = useActorRef(counterMachine)
+      const providedSend = useSend(actor)
+      useLayoutEffect(() => {
+        send = providedSend
+      })
+      return <ActorContext value={actor}>{children}</ActorContext>
+    }
+    render(
+      <Provider>
+        <p data-testid="readers">
+          <Reader />
+          <Suspense fallback="…">
+            <Reader gate={gate.promise} />
+          </Suspense>
+        </p>
+      </Provider>,
+    )
+
+    await act(async () => startTransition(() => send({type: 'inc'})))
+    expect(screen.getByTestId('readers').textContent).toBe('00')
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('readers').textContent).toBe('11')
+  })
+})
+
+describe('updates', () => {
+  it("defaults to a transition for snapshot changes that `send` didn't cause", async () => {
+    const gate = deferred()
+    const app = setup(gate.promise)
+
+    await act(async () => app.actor.send({type: 'inc'}))
+    expect(screen.getByTestId('count').textContent).toBe('0')
+    expect(screen.queryByTestId('fallback')).toBeNull()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('count').textContent).toBe('1')
+  })
+
+  it("renders them with the priority of whatever caused them with `updates: 'sync'`", async () => {
+    const gate = deferred()
+    const app = setup(gate.promise, 'sync')
+
+    await act(async () => app.actor.send({type: 'inc'}))
+    expect(screen.getByTestId('fallback')).toBeTruthy()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('count').textContent).toBe('1')
+  })
+
+  it("still makes `send` a transition with `updates: 'sync'`", async () => {
+    const gate = deferred()
+    const app = setup(gate.promise, 'sync')
+
+    await act(async () => startTransition(() => app.send({type: 'inc'})))
+    expect(screen.getByTestId('count').textContent).toBe('0')
+    expect(screen.queryByTestId('fallback')).toBeNull()
+  })
+})

@@ -1,0 +1,79 @@
+{
+  "name": "@sanity-labs/xstate-react",
+  "version": "0.0.0",
+  "description": "React 19 bindings for XState v6, built for transitions and useOptimistic",
+  "keywords": [
+    "concurrent",
+    "hooks",
+    "react",
+    "react19",
+    "state-machine",
+    "statechart",
+    "transitions",
+    "useOptimistic",
+    "xstate"
+  ],
+  "homepage": "https://github.com/sanity-labs/xstate#readme",
+  "bugs": {
+    "url": "https://github.com/sanity-labs/xstate/issues"
+  },
+  "license": "MIT",
+  "author": "Sanity.io <hello@sanity.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sanity-labs/xstate.git",
+    "directory": "packages/xstate-react"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.js",
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "pnpm build",
+    "test": "vitest run --typecheck",
+    "watch": "tsdown --watch"
+  },
+  "devDependencies": {
+    "@sanity/tsconfig": "^2.2.1",
+    "@sanity/tsdown-config": "^0.33.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "catalog:",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "jsdom": "^31.0.1",
+    "oxc-transform-react": "^0.158.0",
+    "publint": "^0.3.25",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "rxjs": "catalog:",
+    "tsdown": "^0.23.7",
+    "typescript": "catalog:",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.2",
+    "xstate": "6.0.0-beta.5",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^19.3",
+    "xstate": "^6.0.0-beta"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  }
+}
