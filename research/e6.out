@@ -1,0 +1,4 @@
+singleSubscriber            | pending transition: n=0 results=      | after sync sEv: n=1 results= [FALLBACK] 
+singleSubscriber+transitionSend| pending transition: n=0 results=      | after sync sEv: n=0 results= 
+singleSubscriber+optimistic | pending transition: n=0 results=      | after sync sEv: n=1 results= 
+topReducer                  | pending transition: n=0 results=      | after sync sEv: n=1 results= 

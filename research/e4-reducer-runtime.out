@@ -1,0 +1,2 @@
+strict=false: invoke path -> "done" (custom entry action ran 1x, reducer calls 3); timer path -> "timedOut"
+strict=true: invoke path -> "done" (custom entry action ran 1x, reducer calls 6); timer path -> "timedOut"

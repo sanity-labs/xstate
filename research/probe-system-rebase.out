@@ -1,0 +1,3 @@
+sync branch: S effect id = system:0 source root/root.s.run:0
+chronological: T effect id = system:0 , S effect id = system:1
+delivered sync-branch result into chronological state -> THROWS: External effect result does not match its owner or is stale.

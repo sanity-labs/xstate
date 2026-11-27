@@ -3,7 +3,7 @@ import type {KnipConfig} from 'knip'
 const config: KnipConfig = {
   // `pnpm change` is a pnpm 12 built-in, not a package binary.
   ignoreBinaries: ['change'],
-  ignore: ['.agents/skills/**', '.claude/skills/**'],
+  ignore: ['.agents/skills/**', '.claude/skills/**', 'research/**'],
   workspaces: {
     '.': {},
     'examples/async-react': {

@@ -15,6 +15,7 @@
     "CHANGELOG.md",
     ".agents/skills/**",
     ".claude/skills",
-    "examples/async-react/public/mockServiceWorker.js"
+    "examples/async-react/public/mockServiceWorker.js",
+    "research/**"
   ]
 }

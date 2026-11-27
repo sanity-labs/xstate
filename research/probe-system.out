@@ -1,0 +1,7 @@
+initial timers [ [ 200, 'xstate.timer' ] ] fx []
+chronological: tEv -> A/emit/system:0 | sEv -> B/emit/system:1
+rebased sync-first: sEv -> B/emit/system:0
+go -> loading @xstate.effect/action/system:0
+effect source {"@actor":"root/root.loading:0","incarnation":"1"}
+after result -> done 42
+advance 250 -> timedOut

@@ -11,6 +11,11 @@
       "matchPackageNames": ["oxlint", "oxlint-tsgolint"],
       "groupName": "oxlint",
       "semanticCommitType": "chore"
+    },
+    {
+      "description": "The research outputs were recorded against these exact versions.",
+      "matchFileNames": ["research/package.json"],
+      "enabled": false
     }
   ]
 }

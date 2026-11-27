@@ -1,0 +1,7 @@
+xstateReact     | initial: A="" results="" | after transition send: A="a" results="" [FALLBACK] | after urgent mount of B: A="a" results="" [FALLBACK] B="a"
+jotaiReal       | initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B="a"
+jotaiStyle      | initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B="a"
+valueInUpdate   | initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B="a"
+rcsExperimental | initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B="a"
+singleSubscriber| initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B=""
+topReducer      | initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B=""

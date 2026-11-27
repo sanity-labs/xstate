@@ -1,0 +1,30 @@
+== boot cost / SSR
+provider inside <Suspense> renderRead            boot fallback committed 1x, settled DOM: [BOOT FALLBACK]
+provider inside <Suspense> renderRead+subscribe  boot fallback committed 1x, settled DOM: [BOOT FALLBACK]
+provider inside <Suspense> usesPromise           boot fallback committed 1x, settled DOM: [BOOT FALLBACK]
+provider inside <Suspense> contextPromise        boot fallback committed 1x, settled DOM: [BOOT FALLBACK]
+provider outside <Suspense> renderRead            boot fallback committed 1x, settled DOM: A=""
+provider outside <Suspense> renderRead+subscribe  boot fallback committed 1x, settled DOM: A=""
+provider outside <Suspense> usesPromise           boot fallback committed 1x, settled DOM: A=""
+provider outside <Suspense> contextPromise        boot fallback committed 1x, settled DOM: A=""
+SSR (renderToString, contextPromise, provider outside boundary): <template …client-render…><i>[BOOT FALLBACK]</i>
+== E1: transition send (data suspends), then urgent mount of reader B
+renderRead     | A="" results="" | after transition send: A="" results="" | after urgent mount B: A="a" results="" [FALLBACK] B="a"
+renderRead+subscribe| A="" results="" | after transition send: A="" results="" | after urgent mount B: A="a" results="" [FALLBACK] B="a"
+usesPromise    | A="" results="" | after transition send: A="a" results="" [FALLBACK] | after urgent mount B: A="a" results="" [FALLBACK] B="a"
+contextPromise | A="" results="" | after transition send: A="" results="" | after urgent mount B: A="" results="" B=""
+== E6: transition tEv pending (suspended), then sync sEv
+renderRead                | pending: n=0 results=""  | after sync sEv: n=0 results="" 
+renderRead+subscribe      | pending: n=0 results=""  | after sync sEv: n=1 results="" [FALLBACK] 
+usesPromise               | pending: n=0 results="" [FALLBACK] | after sync sEv: n=1 results="" [FALLBACK] 
+contextPromise            | pending: n=0 results=""  | after sync sEv: n=1 results="" [FALLBACK] 
+contextPromise+optimistic | pending: n=0 results=""  | after sync sEv: n=1 results="" 
+== E3: time-sliced transition, second mutation mid-render
+renderRead      2nd=transition          commits: 0            no torn commit
+renderRead+subscribe 2nd=transition          commits: 0 , 2        no torn commit
+usesPromise     2nd=transition          commits: 0 , 1 , 2    no torn commit
+contextPromise  2nd=transition          commits: 0 , 1 , 1 , 2 no torn commit
+renderRead      2nd=outside-transition  commits: 0            no torn commit
+renderRead+subscribe 2nd=outside-transition  commits: 0 , 2        no torn commit
+usesPromise     2nd=outside-transition  commits: 0 , 1 , 2    no torn commit
+contextPromise  2nd=outside-transition  commits: 0 , 1 , 2    no torn commit

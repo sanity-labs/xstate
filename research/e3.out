@@ -1,0 +1,12 @@
+xstateReact   2nd=transition commits: 1 , 2              no torn commit
+jotaiReal     2nd=transition commits: 1|2 , 2            TORN commit(s): 1|2
+jotaiStyle    2nd=transition commits: 1|2 , 2            TORN commit(s): 1|2
+valueInUpdate 2nd=transition commits: 1 , 1 , 2          no torn commit
+singleSubscriber 2nd=transition commits: 1 , 1 , 2          no torn commit
+topReducer    2nd=transition commits: 1 , 2              no torn commit
+xstateReact   2nd=urgent     commits: 1 , 2              no torn commit
+jotaiReal     2nd=urgent     commits: 1|2 , 2            TORN commit(s): 1|2
+jotaiStyle    2nd=urgent     commits: 1|2 , 2            TORN commit(s): 1|2
+valueInUpdate 2nd=urgent     commits: 1 , 2              no torn commit
+singleSubscriber 2nd=urgent     commits: 1 , 2              no torn commit
+topReducer    2nd=urgent     commits: 1 , 2              no torn commit

@@ -10,7 +10,8 @@
     "**/dist",
     ".agents/skills",
     ".claude/skills",
-    "examples/async-react/public/mockServiceWorker.js"
+    "examples/async-react/public/mockServiceWorker.js",
+    "research"
   ],
   "plugins": ["react", "unicorn", "typescript", "oxc", "import", "node"],
   "categories": {
