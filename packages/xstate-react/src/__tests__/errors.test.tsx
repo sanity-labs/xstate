@@ -63,7 +63,7 @@ function Wrong() {
   return null
 }
 
-describe('passing an actor instead of logic', () => {
+describe('passing an actor ref that is not an Actor', () => {
   it('throws', () => {
     expect(() => render(<Wrong />)).toThrow(/expects actor logic/)
   })

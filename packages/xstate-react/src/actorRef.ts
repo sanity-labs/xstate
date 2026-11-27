@@ -1,8 +1,8 @@
 import {useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState} from 'react'
 import {
   _hotSwapActorLogic as hotSwapActorLogic,
+  Actor,
   createActor,
-  type Actor,
   type ActorOptions,
   type AnyActorLogic,
   type AnyStateMachine,
@@ -14,6 +14,10 @@ function isStateMachine(logic: AnyActorLogic): logic is AnyStateMachine {
     !!(logic as any).config &&
     !!(logic as any).sources
   )
+}
+
+export function isActor(value: unknown): value is Actor<AnyActorLogic> {
+  return value instanceof Actor
 }
 
 // The hook updates the sources of its machine on later renders. A per-hook copy keeps those
@@ -54,12 +58,14 @@ function adoptLogic<TLogic extends AnyActorLogic>(
 }
 
 export function useIdleActorRef<TLogic extends AnyActorLogic>(
-  logic: TLogic,
+  logicOrActor: TLogic | Actor<TLogic>,
   options: ActorOptions<TLogic> | undefined,
 ): [Actor<TLogic>, (actorRef: Actor<TLogic>) => void] {
   // React Compiler would turn the `useMemo` below into a cache slot that Fast Refresh never resets.
   'use no memo'
-  const [actorRef, setActorRef] = useState(() => create(ownLogic(logic), options))
+  const [actorRef, setActorRef] = useState(() =>
+    isActor(logicOrActor) ? logicOrActor : create(ownLogic(logicOrActor), options),
+  )
   // Its identity changes only when React Fast Refresh re-renders this component: Fast Refresh
   // ignores dependency lists while it applies an update.
   const refreshSignal = useMemo(() => ({}), [])
@@ -70,8 +76,10 @@ export function useIdleActorRef<TLogic extends AnyActorLogic>(
   useLayoutEffect(() => {
     const refreshed = refreshSignalRef.current !== refreshSignal
     refreshSignalRef.current = refreshSignal
-    adoptLogic(actorRef, logic, refreshed, options, setActorRef)
-  }, [actorRef, logic, refreshSignal, options])
+    if (!isActor(logicOrActor)) {
+      adoptLogic(actorRef, logicOrActor, refreshed, options, setActorRef)
+    }
+  }, [actorRef, logicOrActor, refreshSignal, options])
 
   return [actorRef, setActorRef]
 }

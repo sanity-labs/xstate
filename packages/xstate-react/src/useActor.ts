@@ -10,12 +10,13 @@ import type {
   SnapshotFrom,
 } from 'xstate'
 
-import {useActorLifecycle, useIdleActorRef} from './actorRef'
+import {isActor, useActorLifecycle, useIdleActorRef} from './actorRef'
 import {useActorSnapshot} from './useActorSnapshot'
 
 /**
- * Creates an actor from `logic`, starts it on mount, stops it on unmount, and returns its snapshot
- * and a `send` for it.
+ * Creates an actor from `logic` (or uses an already-created `actor`, e.g. from `restoreActor`),
+ * starts it on mount, stops it on unmount, and returns its snapshot and a `send` for it. Create a
+ * passed actor once, e.g. `useState(() => restoreActor(machine, persisted))[0]`.
  *
  * Every snapshot change renders as a transition. `send` sends in a transition: the one it is called
  * in, or a transition of its own. For UI that must update right away, like a controlled input, hold
@@ -28,6 +29,10 @@ import {useActorSnapshot} from './useActorSnapshot'
  * @public
  */
 export function useActor<TLogic extends AnyActorLogic>(
+  actor: Actor<TLogic>,
+): [SnapshotFrom<TLogic>, Actor<TLogic>['send']]
+/** @public */
+export function useActor<TLogic extends AnyActorLogic>(
   logic: TLogic,
   ...[options]: ConditionalRequired<
     [options?: ActorOptions<TLogic> & RequiredActorOptionsFor<TLogic>],
@@ -35,12 +40,13 @@ export function useActor<TLogic extends AnyActorLogic>(
   >
 ): [SnapshotFrom<TLogic>, Actor<TLogic>['send']]
 export function useActor<TLogic extends AnyActorLogic>(
-  logic: TLogic,
+  logic: TLogic | Actor<TLogic>,
   options?: ActorOptions<TLogic>,
 ): [SnapshotFrom<TLogic>, Actor<TLogic>['send']] {
-  if (!!logic && 'send' in logic && typeof logic.send === 'function') {
+  const readyActor = isActor(logic)
+  if (!readyActor && !!logic && 'send' in logic && typeof logic.send === 'function') {
     throw new Error(
-      `useActor() expects actor logic (e.g. a machine), but received an actor. Pass the logic it was created from instead.`,
+      `useActor() expects actor logic (e.g. a machine) or an Actor created with createActor() or restoreActor(), but received another kind of actor ref.`,
     )
   }
 
@@ -56,7 +62,7 @@ export function useActor<TLogic extends AnyActorLogic>(
     [actorRef],
   )
 
-  useActorLifecycle(actorRef, setActorRef, options)
+  useActorLifecycle(actorRef, setActorRef, readyActor ? actorRef.options : options)
 
   return [snapshot, send]
 }

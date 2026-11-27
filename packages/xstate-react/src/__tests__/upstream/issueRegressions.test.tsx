@@ -5,7 +5,8 @@
 import {render, screen} from '@testing-library/react'
 import * as React from 'react'
 import {describe, expect, it} from 'vitest'
-import {createCallbackLogic, createMachine, setup, types} from 'xstate'
+import {createActor, createCallbackLogic, createMachine, setup, types} from 'xstate'
+import {restoreActor} from 'xstate/persist'
 
 import {useActor} from '../../index'
 
@@ -102,5 +103,35 @@ describe('lifecycle', () => {
 
     // React 19 invokes the callback ref twice under StrictMode
     expect(screen.getByText(/count:/).textContent).toBe('count: 2')
+  })
+})
+
+describe('types', () => {
+  it('#5480 useActor accepts persisted and live snapshots', () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {a: {on: {NEXT: {target: 'b'}}}, b: {}},
+    })
+    const actor = createActor(machine).start()
+    actor.send({type: 'NEXT'})
+    const persisted = actor.getPersistedSnapshot()
+    const live = actor.getSnapshot()
+    const fromStorage = JSON.parse(JSON.stringify(persisted))
+
+    function App() {
+      const [actors] = React.useState(() => [
+        restoreActor(machine, persisted),
+        restoreActor(machine, live),
+        restoreActor(machine, fromStorage),
+      ])
+      const [a] = useActor(actors[0])
+      const [b] = useActor(actors[1])
+      const [c] = useActor(actors[2])
+      return <div data-testid="values">{[a.value, b.value, c.value].join(',')}</div>
+    }
+
+    render(<App />)
+
+    expect(screen.getByTestId('values').textContent).toBe('b,b,b')
   })
 })

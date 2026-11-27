@@ -107,9 +107,28 @@ The same goes for switching machines:
 <Editor key={mode} machine={mode === 'draft' ? draftMachine : reviewMachine} />
 ```
 
+### Restoring a persisted actor
+
+`useActor` also takes an actor you created, like one from `restoreActor`. Create it once, in `useState`'s initializer, so later renders don't create another:
+
+```tsx
+import {useActor} from '@sanity-labs/xstate-react'
+import {useState} from 'react'
+import type {Snapshot} from 'xstate'
+import {restoreActor} from 'xstate/persist'
+
+function Checkout({persisted}: {persisted: Snapshot<unknown>}) {
+  const [actor] = useState(() => restoreActor(checkoutMachine, persisted))
+  const [snapshot, send] = useActor(actor)
+  // ...
+}
+```
+
+The hook starts and stops the actor you pass, as it does one it creates, and its snapshot changes render as transitions too. The actor passed on the first render is used for the component's lifetime: to restore a different snapshot, change the component's `key`. Pass it options, like `input`, when you create it, since `useActor` takes no options with an actor.
+
 ### Starting and stopping
 
-The actor starts when the component mounts and stops when it unmounts. Stopping waits a microtask, so the unmount and remount that `StrictMode` simulates keep the running actor. v6 actors can't be restarted once stopped, so when a stopped actor's component is shown again, the hook creates a fresh actor from the same machine.
+The actor starts when the component mounts and stops when it unmounts. Stopping waits a microtask, so the unmount and remount that `StrictMode` simulates keep the running actor. v6 actors can't be restarted once stopped, so when a stopped actor's component is shown again, the hook creates a fresh actor from the same machine. For an actor you passed, the fresh actor is created with the same options, so one from `restoreActor` starts again from the snapshot it restored, not from where the stopped actor left off.
 
 `<Activity mode="hidden">` cleans up effects, so an actor that a hidden component owns stops, and the component starts over with a fresh actor when it's shown again. To keep an actor running while part of the tree is hidden, call `useActor` above the `Activity` boundary and pass the snapshot down.
 

@@ -21,8 +21,8 @@ export default function Login() {
   const [form, sendField] = useActor(loginFormMachine)
   const {revision, send} = useRouter()
 
-  async function submitAction() {
-    await data.login(form.context)
+  async function submitAction(fields: LoginFields) {
+    await data.login(fields)
     // Logging in completes to the home page with its lessons when they load within a second, and
     // to its fallback otherwise.
     await data.prefetchLessons(revision)
@@ -33,8 +33,7 @@ export default function Login() {
     <Design.LoginForm
       fields={form.context}
       changeAction={(field, value) => sendField({type: 'field.change', field, value})}
-    >
-      <Design.Button action={submitAction}>Login</Design.Button>
-    </Design.LoginForm>
+      submitAction={submitAction}
+    />
   )
 }

@@ -1,6 +1,7 @@
 import {render} from '@testing-library/react'
 import {describe, expect, it} from 'vitest'
 import {ActorRefFrom, createActor, createMachine} from 'xstate'
+import {restoreActor} from 'xstate/persist'
 import z from 'zod'
 
 import {useActor} from '../../index'
@@ -189,8 +190,29 @@ describe('the tuple', () => {
       send({type: 'ANY'})
       // @ts-expect-error there is no third element
       const _actor = result[2]
-      // @ts-expect-error an actor is not logic
-      useActor(createActor(machine))
+      const [restored, sendRestored] = useActor(createActor(machine))
+      restored.matches('idle')
+      sendRestored({type: 'ANY'})
+    }
+
+    expect(check).toBeTypeOf('function')
+  })
+
+  it('should not require input for a restored actor', () => {
+    const machine = createMachine({
+      schemas: {input: z.object({value: z.number()})},
+    })
+    const snapshot = createActor(machine, {
+      input: {value: 1},
+    }).getPersistedSnapshot()
+
+    // Type-only checks: the hook needs a component to run.
+    const check = () => {
+      useActor(restoreActor(machine, snapshot))
+      // @ts-expect-error input is required
+      useActor(machine)
+      // @ts-expect-error input is required
+      useActor(machine, {})
     }
 
     expect(check).toBeTypeOf('function')

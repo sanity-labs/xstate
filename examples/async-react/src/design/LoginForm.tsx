@@ -1,9 +1,11 @@
-import {startTransition, useOptimistic, type ReactNode} from 'react'
+import {startTransition, useOptimistic} from 'react'
 
 import {CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Field, FieldDescription, FieldGroup, FieldLabel} from '@/components/ui/field'
 import {Input} from '@/components/ui/input'
 import {Separator} from '@/components/ui/separator'
+
+import Button from './Button'
 
 export interface LoginFields {
   username: string
@@ -13,11 +15,11 @@ export interface LoginFields {
 export default function LoginForm({
   fields,
   changeAction,
-  children,
+  submitAction,
 }: {
   fields: LoginFields
   changeAction: (field: keyof LoginFields, value: string) => void | Promise<void>
-  children: ReactNode
+  submitAction: (fields: LoginFields) => Promise<void>
 }) {
   const [optimisticFields, setOptimisticField] = useOptimistic(
     fields,
@@ -66,7 +68,7 @@ export default function LoginForm({
             />
           </Field>
           <Field>
-            {children}
+            <Button action={() => submitAction(optimisticFields)}>Login</Button>
             <FieldDescription className="text-center">
               Don't have an account? <a href="#">Tough!</a>
             </FieldDescription>
