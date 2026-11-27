@@ -1,0 +1,5 @@
+jotaiReal(useAtomValue)    store=1, reader=1 
+jotaiReal(useAtomValueRaw) store=1, reader=1 
+jotaiStyle                 store=1, reader=1 
+valueInUpdate              store=1, reader=1 
+noRecheck                  store=1, reader=0 

@@ -1,0 +1,15 @@
+{
+  "name": "xstate-react-research",
+  "private": true,
+  "description": "Experiments behind @sanity-labs/xstate-react. Not part of the pnpm workspace or the published package.",
+  "type": "module",
+  "dependencies": {
+    "@xstate/react": "7.0.0-beta.0",
+    "jotai": "3.0.2",
+    "jsdom": "31.0.1",
+    "react": "19.3.1",
+    "react-concurrent-store": "0.0.1",
+    "react-dom": "19.3.1",
+    "xstate": "6.0.0-beta.5"
+  }
+}
