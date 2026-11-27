@@ -2,13 +2,24 @@ import {createMachine, types} from 'xstate'
 
 import {writeLatency, type ApiPath, type Latency, type MockRequest} from '@/mocks/latency'
 
+export type Requests = Record<ApiPath, readonly MockRequest[]>
+
+export function addRequest(requests: Requests, request: MockRequest): Requests {
+  const current = requests[request.path]
+  if (current.some(({id}) => id === request.id)) {
+    return requests
+  }
+  return {...requests, [request.path]: [...current, request]}
+}
+
+export function removeRequest(requests: Requests, path: ApiPath, id: string): Requests {
+  return {...requests, [path]: requests[path].filter((request) => request.id !== id)}
+}
+
 export const networkMachine = createMachine({
   schemas: {
     input: types<{latency: Record<ApiPath, Latency>}>(),
-    context: types<{
-      latency: Record<ApiPath, Latency>
-      requests: Record<ApiPath, MockRequest[]>
-    }>(),
+    context: types<{latency: Record<ApiPath, Latency>; requests: Requests}>(),
     events: {
       'latency.set': types<{path: ApiPath; latency: Latency}>(),
       'request.start': types<{request: MockRequest}>(),
@@ -29,7 +40,7 @@ export const networkMachine = createMachine({
       const latency = context.latency[path]
       return {
         context: {
-          requests: {...context.requests, [path]: [...context.requests[path], event.request]},
+          requests: addRequest(context.requests, event.request),
           // A realistic latency is random, so the latest request's is the one to show.
           latency:
             latency.mode === 'real'
@@ -39,12 +50,7 @@ export const networkMachine = createMachine({
       }
     },
     'request.end': ({context, event}) => ({
-      context: {
-        requests: {
-          ...context.requests,
-          [event.path]: context.requests[event.path].filter((request) => request.id !== event.id),
-        },
-      },
+      context: {requests: removeRequest(context.requests, event.path, event.id)},
     }),
   },
 })

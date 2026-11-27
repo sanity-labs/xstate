@@ -1,22 +1,23 @@
 import {render} from '@testing-library/react'
-import {memo, startTransition, useEffect, useLayoutEffect, useReducer, type ReactNode} from 'react'
+import {
+  memo,
+  startTransition,
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useState,
+  type ReactNode,
+} from 'react'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {createActor, type Actor} from 'xstate'
 
-import {createActorContext} from '../index'
+import {useActor} from '../index'
 import {textMachine} from './helpers'
 
 // In its own file: whether a change during a render restarts it depends on which transition lanes
 // React hands out, and React's lane counter is module state that earlier tests would advance.
 
 type TextActor = Actor<typeof textMachine>
-type TextSource = (props: {actor: TextActor; children: (text: string) => ReactNode}) => ReactNode
-
-const Text = createActorContext(textMachine)
-
-function ProvidedText({children}: {children: (text: string) => ReactNode}) {
-  return children(Text.useSelector((snapshot) => snapshot.context.text))
-}
 
 /** A hook that reads the actor during render and re-renders on change, as a control. */
 function useReadDuringRender(actor: TextActor): string {
@@ -36,10 +37,6 @@ function busy(ms: number) {
   }
 }
 
-function ReadDuringRenderText({actor, children}: Parameters<TextSource>[0]) {
-  return children(useReadDuringRender(actor))
-}
-
 describe('a change arriving during a time-sliced transition render', () => {
   const global = globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}
   beforeEach(() => {
@@ -51,16 +48,21 @@ describe('a change arriving during a time-sliced transition render', () => {
 
   const readers = 120
 
-  async function run(Source: TextSource): Promise<{torn: string[]; commits: string[]}> {
-    const actor = createActor(textMachine).start()
+  type Readers = (props: {
+    Reader: (props: {text: string; index: number}) => ReactNode
+    onSend: (send: (text: string) => void) => void
+  }) => ReactNode
+
+  async function run(Readers: Readers): Promise<{torn: string[]; commits: string[]}> {
     const torn: string[] = []
     const commits = new Set<string>()
     const changed = new Set<string>()
+    let send!: (text: string) => void
     function Shown({text, index}: {text: string; index: number}) {
       // The second change arrives while React yields during the render of the first.
       if (index === 10 && text === '1' && !changed.has(text)) {
         changed.add(text)
-        queueMicrotask(() => actor.send({type: 'change', text: '2'}))
+        queueMicrotask(() => send('2'))
       }
       busy(1)
       useLayoutEffect(() => {
@@ -74,20 +76,16 @@ describe('a change arriving during a time-sliced transition render', () => {
       })
       return <span data-reader="">{text}</span>
     }
-    const Reader = memo(function Reader({index}: {index: number}) {
-      return <Source actor={actor}>{(text) => <Shown text={text} index={index} />}</Source>
-    })
-    function Provider({children}: {children: ReactNode}) {
-      return <Text.Provider actor={actor}>{children}</Text.Provider>
-    }
+    const Reader = memo(Shown)
     const {unmount} = render(
-      <Provider>
-        {Array.from({length: readers}, (_, i) => (
-          <Reader key={i} index={i} />
-        ))}
-      </Provider>,
+      <Readers
+        Reader={Reader}
+        onSend={(next) => {
+          send = next
+        }}
+      />,
     )
-    startTransition(() => actor.send({type: 'change', text: '1'}))
+    startTransition(() => send('1'))
     await vi.waitFor(
       () => {
         const shown = Array.from(document.querySelectorAll('[data-reader]'), (n) => n.textContent)
@@ -99,15 +97,47 @@ describe('a change arriving during a time-sliced transition render', () => {
     return {torn, commits: [...commits]}
   }
 
+  function ActorReaders({Reader, onSend}: Parameters<Readers>[0]) {
+    const [snapshot, send] = useActor(textMachine)
+    useLayoutEffect(() => {
+      onSend((text) => send({type: 'change', text}))
+    })
+    return Array.from({length: readers}, (_, i) => (
+      <Reader key={i} index={i} text={snapshot.context.text} />
+    ))
+  }
+
+  const ReadDuringRenderReader = memo(function ReadDuringRenderReader({
+    actor,
+    index,
+    Reader,
+  }: {
+    actor: TextActor
+    index: number
+    Reader: Parameters<Readers>[0]['Reader']
+  }) {
+    return <Reader index={index} text={useReadDuringRender(actor)} />
+  })
+
+  function ReadDuringRenderReaders({Reader, onSend}: Parameters<Readers>[0]) {
+    const [actor] = useState(() => createActor(textMachine).start())
+    useLayoutEffect(() => {
+      onSend((text: string) => actor.send({type: 'change', text}))
+    })
+    return Array.from({length: readers}, (_, i) => (
+      <ReadDuringRenderReader key={i} actor={actor} index={i} Reader={Reader} />
+    ))
+  }
+
   it('never commits readers showing different snapshots', async () => {
-    const {torn, commits} = await run(ProvidedText)
+    const {torn, commits} = await run(ActorReaders)
     expect(torn).toEqual([])
     // The render the change interrupted committed the first snapshot instead of restarting.
     expect(commits).toEqual(['', '1', '2'])
   })
 
   it('tears when readers read the actor during render (control)', async () => {
-    const {torn} = await run(ReadDuringRenderText)
+    const {torn} = await run(ReadDuringRenderReaders)
     expect(torn).toContain('1|2')
   })
 })

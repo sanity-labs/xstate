@@ -1,19 +1,17 @@
 import {act, render, screen} from '@testing-library/react'
 import {
   addTransitionType,
-  createContext,
   startTransition,
   Suspense,
   use,
   useLayoutEffect,
   useTransition,
   ViewTransition,
-  type ReactNode,
 } from 'react'
 import {describe, expect, it} from 'vitest'
 import {createActor, createMachine, SimulatedClock, types} from 'xstate'
 
-import {useActor, useActorRef, useSelector, useSend, type Updates} from '../index'
+import {useActor} from '../index'
 import {counterMachine, deferred, recordViewTransitionTypes} from './helpers'
 
 function Gate({count, gate}: {count: number; gate: Promise<void>}) {
@@ -23,16 +21,14 @@ function Gate({count, gate}: {count: number; gate: Promise<void>}) {
   return <p data-testid="count">{count}</p>
 }
 
-function setup(gate: Promise<void>, updates?: Updates) {
+function setup(gate: Promise<void>) {
   let send!: ReturnType<typeof useActor<typeof counterMachine>>[1]
-  let actor!: ReturnType<typeof useActor<typeof counterMachine>>[2]
   let isPending = false
   function App() {
-    const [snapshot, _send, _actor] = useActor(counterMachine, {updates})
+    const [snapshot, _send] = useActor(counterMachine)
     const [pending] = useTransition()
     useLayoutEffect(() => {
       send = _send
-      actor = _actor
       isPending = pending
     })
     return (
@@ -46,11 +42,15 @@ function setup(gate: Promise<void>, updates?: Updates) {
   render(<App />)
   return {
     send: (...args: Parameters<typeof send>) => send(...args),
-    get actor() {
-      return actor
-    },
     isPending: () => isPending,
   }
+}
+
+function Reader({count, gate}: {count: number; gate?: Promise<void>}) {
+  if (gate && count > 0) {
+    use(gate)
+  }
+  return <span>{count}</span>
 }
 
 const viewTransitionTypes = recordViewTransitionTypes()
@@ -165,76 +165,31 @@ describe('send', () => {
     expect(screen.getByTestId('count').textContent).toBe('1')
   })
 
-  it('makes every reader of the actor update in the same transition', async () => {
-    const ActorContext = createContext(createActor(counterMachine))
+  it('makes every reader of the snapshot update in the same transition', async () => {
     const gate = deferred()
     let send!: (event: {type: 'inc'}) => void
-    function Reader({gate}: {gate?: Promise<void>}) {
-      const actor = use(ActorContext)
-      const count = useSelector(actor, (snapshot) => snapshot.context.count)
-      if (gate && count > 0) {
-        use(gate)
-      }
-      return <span>{count}</span>
-    }
-    function Provider({children}: {children: ReactNode}) {
-      const actor = useActorRef(counterMachine)
-      const providedSend = useSend(actor)
+    function App() {
+      const [snapshot, _send] = useActor(counterMachine)
       useLayoutEffect(() => {
-        send = providedSend
+        send = _send
       })
-      return <ActorContext value={actor}>{children}</ActorContext>
-    }
-    render(
-      <Provider>
+      const {count} = snapshot.context
+      return (
         <p data-testid="readers">
-          <Reader />
+          <Reader count={count} />
           <Suspense fallback="…">
-            <Reader gate={gate.promise} />
+            <Reader count={count} gate={gate.promise} />
           </Suspense>
         </p>
-      </Provider>,
-    )
+      )
+    }
+    render(<App />)
 
     await act(async () => startTransition(() => send({type: 'inc'})))
     expect(screen.getByTestId('readers').textContent).toBe('00')
 
     await act(async () => gate.resolve())
     expect(screen.getByTestId('readers').textContent).toBe('11')
-  })
-})
-
-describe('updates', () => {
-  it("defaults to a transition for snapshot changes that `send` didn't cause", async () => {
-    const gate = deferred()
-    const app = setup(gate.promise)
-
-    await act(async () => app.actor.send({type: 'inc'}))
-    expect(screen.getByTestId('count').textContent).toBe('0')
-    expect(screen.queryByTestId('fallback')).toBeNull()
-
-    await act(async () => gate.resolve())
-    expect(screen.getByTestId('count').textContent).toBe('1')
-  })
-
-  it("renders them with the priority of whatever caused them with `updates: 'sync'`", async () => {
-    const gate = deferred()
-    const app = setup(gate.promise, 'sync')
-
-    await act(async () => app.actor.send({type: 'inc'}))
-    expect(screen.getByTestId('fallback')).toBeTruthy()
-
-    await act(async () => gate.resolve())
-    expect(screen.getByTestId('count').textContent).toBe('1')
-  })
-
-  it("still makes `send` a transition with `updates: 'sync'`", async () => {
-    const gate = deferred()
-    const app = setup(gate.promise, 'sync')
-
-    await act(async () => startTransition(() => app.send({type: 'inc'})))
-    expect(screen.getByTestId('count').textContent).toBe('0')
-    expect(screen.queryByTestId('fallback')).toBeNull()
   })
 })
 
@@ -256,12 +211,12 @@ function Results({query, gate}: {query: string; gate: Promise<void>}) {
   return <p data-testid="query">{query}</p>
 }
 
-function renderToast(updates: Updates) {
+function renderToast() {
   const gate = deferred()
   const clock = new SimulatedClock()
   let send!: ReturnType<typeof useActor<typeof toastMachine>>[1]
   function Toast() {
-    const [snapshot, _send] = useActor(toastMachine, {clock, updates})
+    const [snapshot, _send] = useActor(toastMachine, {clock})
     useLayoutEffect(() => {
       send = _send
     })
@@ -279,8 +234,8 @@ function renderToast(updates: Updates) {
 }
 
 describe('a timer firing while a transition is suspended', () => {
-  it('waits behind the transition by default, and renders with it', async () => {
-    const {gate, clock, send} = renderToast('transition')
+  it('waits behind the transition, and renders with it', async () => {
+    const {gate, clock, send} = renderToast()
 
     await act(async () => startTransition(() => send({type: 'search', query: 'x'})))
     await act(async () => clock.increment(1000))
@@ -290,18 +245,6 @@ describe('a timer firing while a transition is suspended', () => {
 
     await act(async () => gate.resolve())
     expect(screen.getByTestId('toast').textContent).toBe('hidden')
-    expect(screen.getByTestId('query').textContent).toBe('x')
-  })
-
-  it("renders right away with `updates: 'sync'`, revealing the suspended transition's snapshot", async () => {
-    const {gate, clock, send} = renderToast('sync')
-
-    await act(async () => startTransition(() => send({type: 'search', query: 'x'})))
-    await act(async () => clock.increment(1000))
-    expect(screen.getByTestId('toast').textContent).toBe('hidden')
-    expect(screen.getByTestId('fallback')).toBeTruthy()
-
-    await act(async () => gate.resolve())
     expect(screen.getByTestId('query').textContent).toBe('x')
   })
 })

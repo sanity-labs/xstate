@@ -4,9 +4,9 @@ import {ActorRefFrom, createActor, createMachine} from 'xstate'
 import {restoreActor} from 'xstate/persist'
 import z from 'zod'
 
-import {useActor, useActorRef, useMachine, useSelector} from '../../index'
+import {useActor} from '../../index'
 
-describe('useMachine', () => {
+describe('useActor', () => {
   interface YesNoContext {
     value?: number
   }
@@ -43,7 +43,7 @@ describe('useMachine', () => {
 
   it('state should not become never after checking state with matches', () => {
     const YesNo = () => {
-      const [state] = useMachine(yesNoMachine)
+      const [state] = useActor(yesNoMachine)
 
       if (state.matches('no')) {
         return <span>No</span>
@@ -107,7 +107,7 @@ describe('useMachine', () => {
     }
 
     function Element({myActor}: Props) {
-      const current = useSelector(myActor, (state) => state)
+      const current = myActor.getSnapshot()
       const bar: number = current.context.bar
 
       // @ts-expect-error
@@ -122,7 +122,7 @@ describe('useMachine', () => {
     }
 
     function App() {
-      const [current] = useMachine(m)
+      const [current] = useActor(m)
 
       if (!current.context.actor) {
         return null
@@ -180,7 +180,24 @@ describe('useActor', () => {
   })
 })
 
-describe('useActorRef', () => {
+describe('the tuple', () => {
+  it('is the snapshot and `send`, without the actor', () => {
+    const machine = createMachine({initial: 'idle', states: {idle: {}}})
+    const check = () => {
+      const result = useActor(machine)
+      const [snapshot, send] = result
+      snapshot.matches('idle')
+      send({type: 'ANY'})
+      // @ts-expect-error there is no third element
+      const _actor = result[2]
+      const [restored, sendRestored] = useActor(createActor(machine))
+      restored.matches('idle')
+      sendRestored({type: 'ANY'})
+    }
+
+    expect(check).toBeTypeOf('function')
+  })
+
   it('should not require input for a restored actor', () => {
     const machine = createMachine({
       schemas: {input: z.object({value: z.number()})},
@@ -189,63 +206,20 @@ describe('useActorRef', () => {
       input: {value: 1},
     }).getPersistedSnapshot()
 
-    // Type-only checks: the hooks need a component to run.
+    // Type-only checks: the hook needs a component to run.
     const check = () => {
-      const restored = restoreActor(machine, snapshot)
-      useActorRef(restored)
-      useActor(restored)
-      useMachine(restored)
+      useActor(restoreActor(machine, snapshot))
       // @ts-expect-error input is required
-      useActorRef(machine)
+      useActor(machine)
       // @ts-expect-error input is required
-      useActorRef(machine, {})
+      useActor(machine, {})
     }
 
     expect(check).toBeTypeOf('function')
   })
-
-  it('should require input to be specified when defined', () => {
-    const withInputMachine = createMachine({
-      // types: {} as { input: { value: number } },
-      schemas: {
-        input: z.object({
-          value: z.number(),
-        }),
-      },
-      initial: 'idle',
-      states: {
-        idle: {},
-      },
-    })
-
-    const Component = () => {
-      // @ts-expect-error input is required
-      const _ = useActorRef(withInputMachine)
-      return <></>
-    }
-
-    render(<Component />)
-  })
-
-  it('should not require input when not defined', () => {
-    const noInputMachine = createMachine({
-      // types: {} as {},
-      initial: 'idle',
-      states: {
-        idle: {},
-      },
-    })
-
-    const Component = () => {
-      const _ = useActorRef(noInputMachine)
-      return <></>
-    }
-
-    render(<Component />)
-  })
 })
 
-it('useMachine types work for machines with a specified id and state with an after property #5008', () => {
+it('useActor types work for machines with a specified id and state with an after property #5008', () => {
   // https://github.com/statelyai/xstate/issues/5008
   const cheatCodeMachine = createMachine({
     id: 'cheatCodeMachine',
@@ -260,7 +234,7 @@ it('useMachine types work for machines with a specified id and state with an aft
 
   function _useCheatCode(): boolean {
     // This should typecheck without errors
-    const [state] = useMachine(cheatCodeMachine)
+    const [state] = useActor(cheatCodeMachine)
 
     return state.matches('enabled')
   }

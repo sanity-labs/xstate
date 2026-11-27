@@ -1,9 +1,11 @@
-import type {ReactNode} from 'react'
+import {startTransition, useOptimistic} from 'react'
 
 import {CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Field, FieldDescription, FieldGroup, FieldLabel} from '@/components/ui/field'
 import {Input} from '@/components/ui/input'
 import {Separator} from '@/components/ui/separator'
+
+import Button from './Button'
 
 export interface LoginFields {
   username: string
@@ -12,13 +14,28 @@ export interface LoginFields {
 
 export default function LoginForm({
   fields,
-  onChange,
-  children,
+  changeAction,
+  submitAction,
 }: {
   fields: LoginFields
-  onChange: (field: keyof LoginFields, value: string) => void
-  children: ReactNode
+  changeAction: (field: keyof LoginFields, value: string) => void | Promise<void>
+  submitAction: (fields: LoginFields) => Promise<void>
 }) {
+  const [optimisticFields, setOptimisticField] = useOptimistic(
+    fields,
+    (current, {field, value}: {field: keyof LoginFields; value: string}) => ({
+      ...current,
+      [field]: value,
+    }),
+  )
+
+  function onChange(field: keyof LoginFields, value: string) {
+    startTransition(async () => {
+      setOptimisticField({field, value})
+      await changeAction(field, value)
+    })
+  }
+
   return (
     <>
       <CardHeader>
@@ -33,7 +50,7 @@ export default function LoginForm({
             <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input
               id="email"
-              value={fields.username}
+              value={optimisticFields.username}
               onChange={(e) => onChange('username', e.target.value)}
               type="email"
               placeholder="m@example.com"
@@ -45,13 +62,13 @@ export default function LoginForm({
             </div>
             <Input
               id="password"
-              value={fields.password}
+              value={optimisticFields.password}
               onChange={(e) => onChange('password', e.target.value)}
               type="password"
             />
           </Field>
           <Field>
-            {children}
+            <Button action={() => submitAction(optimisticFields)}>Login</Button>
             <FieldDescription className="text-center">
               Don't have an account? <a href="#">Tough!</a>
             </FieldDescription>

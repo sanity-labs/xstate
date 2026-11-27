@@ -5,12 +5,12 @@ import {createStepLogic, createMachine, setup} from 'xstate'
 import {standardSchemaValidator} from 'xstate/validation'
 import {z} from 'zod'
 
-import {useActorRef} from '../../index'
+import {useActorRef} from './utils'
 
 // Stands in for React Fast Refresh: replacing `refresh.signal` makes the next
 // render look like a refresh re-render.
 const refresh = vi.hoisted(() => ({signal: {} as object}))
-// `useActorRef` detects a refresh through its only zero-dependency `useMemo`.
+// `useIdleActorRef` detects a refresh through its only zero-dependency `useMemo`.
 vi.mock('react', async (importOriginal) => {
   const React = await importOriginal<typeof import('react')>()
   return {

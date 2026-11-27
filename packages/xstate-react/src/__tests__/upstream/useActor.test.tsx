@@ -10,7 +10,7 @@ import {createCallbackLogic, createObservableLogic, createAsyncLogic} from 'xsta
 import {restoreActor} from 'xstate/persist'
 import z from 'zod'
 
-import {useActor, useSelector} from '../../index'
+import {useActor} from '../../index'
 import {describeEachReactMode} from './utils'
 
 afterEach(() => {
@@ -169,20 +169,6 @@ describeEachReactMode('useActor (%s)', ({suiteKey, render}) => {
     await screen.findByText(/Success/)
     const dataEl = screen.getByTestId('data')
     expect(dataEl.textContent).toBe('persisted data')
-  })
-
-  it('should provide the service', () => {
-    const Test = () => {
-      const [, , service] = useActor(fetchMachine)
-
-      if (!(service instanceof Actor)) {
-        throw new Error('service not instance of Interpreter')
-      }
-
-      return null
-    }
-
-    render(<Test />)
   })
 
   it('should accept input and provide it to the context factory', () => {
@@ -771,7 +757,7 @@ describeEachReactMode('useActor (%s)', ({suiteKey, render}) => {
 
     const Test = () => {
       const [state] = useActor(machine)
-      const childState = useSelector(state.children.test!, (s) => s)
+      const childState = state.children.test!.getSnapshot()
 
       expect(childState.context.value).toBe(42)
 

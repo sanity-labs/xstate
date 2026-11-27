@@ -9,7 +9,7 @@ import Login from '@/app/Login'
 import {Card, CardContent} from '@/components/ui/card'
 import {NetworkDebugger} from '@/debugger/NetworkDebugger'
 import {startMockServer} from '@/mocks/browser'
-import {Router, RouterProvider} from '@/router/index'
+import {RouterProvider, useRouter} from '@/router/index'
 
 const pageTransition = {
   'navigation-back': 'slide-back',
@@ -45,7 +45,7 @@ function Layout({children}: {children: ReactNode}) {
 }
 
 function Routes() {
-  const path = Router.useSelector(({context}) => context.location.path)
+  const {path} = useRouter().location
 
   return (
     <>

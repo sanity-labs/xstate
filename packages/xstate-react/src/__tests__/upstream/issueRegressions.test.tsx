@@ -8,7 +8,7 @@ import {describe, expect, it} from 'vitest'
 import {createActor, createCallbackLogic, createMachine, setup, types} from 'xstate'
 import {restoreActor} from 'xstate/persist'
 
-import {useMachine} from '../../index'
+import {useActor} from '../../index'
 
 describe('lifecycle', () => {
   it('#5272 an invoked callback starts once under StrictMode', () => {
@@ -26,7 +26,7 @@ describe('lifecycle', () => {
     })
 
     function App() {
-      useMachine(appMachine)
+      useActor(appMachine)
       return null
     }
 
@@ -55,7 +55,7 @@ describe('lifecycle', () => {
     })
 
     function App() {
-      useMachine(rootMachine)
+      useActor(rootMachine)
       return null
     }
 
@@ -83,7 +83,7 @@ describe('lifecycle', () => {
     })
 
     function Counter() {
-      const [current, send] = useMachine(counterMachine)
+      const [current, send] = useActor(counterMachine)
       const ref = React.useCallback(
         (node: HTMLElement | null) => {
           if (node) {
@@ -107,7 +107,7 @@ describe('lifecycle', () => {
 })
 
 describe('types', () => {
-  it('#5480 useMachine accepts persisted and live snapshots', () => {
+  it('#5480 useActor accepts persisted and live snapshots', () => {
     const machine = createMachine({
       initial: 'a',
       states: {a: {on: {NEXT: {target: 'b'}}}, b: {}},
@@ -124,9 +124,9 @@ describe('types', () => {
         restoreActor(machine, live),
         restoreActor(machine, fromStorage),
       ])
-      const [a] = useMachine(actors[0])
-      const [b] = useMachine(actors[1])
-      const [c] = useMachine(actors[2])
+      const [a] = useActor(actors[0])
+      const [b] = useActor(actors[1])
+      const [c] = useActor(actors[2])
       return <div data-testid="values">{[a.value, b.value, c.value].join(',')}</div>
     }
 
