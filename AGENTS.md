@@ -5,6 +5,7 @@
 This is the `sanity-labs/xstate` pnpm monorepo (workspaces defined in `pnpm-workspace.yaml`):
 
 - `packages/xstate-react` — the `@sanity-labs/xstate-react` library (XState v6 bindings for React 19 transitions). Built with `tsdown` (configured through `@sanity/tsdown-config` in `packages/xstate-react/tsdown.config.ts`), tested with Vitest.
+- `examples/async-react` — a Vite demo of the library, run with `pnpm dev`. It resolves `@sanity-labs/xstate-react` to the workspace source, so it needs no build first. CI typechecks, tests and builds it in the `demo` job.
 
 Standard commands are defined in the root `package.json` scripts and mirror CI (`.github/workflows/ci.yml`): `pnpm build`, `pnpm lint`, `pnpm exec oxfmt --check`, `pnpm knip`, `pnpm test`. Dependencies are installed with `pnpm install` (pnpm version is pinned via `packageManager`).
 
