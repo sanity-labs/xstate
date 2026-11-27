@@ -96,7 +96,10 @@ class Execution<TLogic extends AnyActorLogic> {
   }
 
   start(): Promise<void> {
-    this.started ??= this.durable.executeEffects(this.initialEffects)
+    if (this.stopped) {
+      return this.started ?? Promise.resolve()
+    }
+    this.started ??= this.runEffects(this.initialEffects)
     return this.started
   }
 
@@ -110,7 +113,14 @@ class Execution<TLogic extends AnyActorLogic> {
     }
     const [next, effects] = this.durable.transition(prev, event as EventFromLogic<TLogic>)
     this.head = next
-    await this.durable.executeEffects(effects)
+    if (this.stopped) {
+      this.stop()
+      return prev
+    }
+    await this.runEffects(effects)
+    if (this.stopped) {
+      return prev
+    }
     return next
   }
 
@@ -119,9 +129,29 @@ class Execution<TLogic extends AnyActorLogic> {
     for (const key of this.timers.keys()) {
       this.clearTimer(key)
     }
+    // The durable root is inert and never enters the running status, so
+    // `stopActor(root)` alone does not cascade. Stop each live child first.
     const root = this.durable.getActorRef(this.head)
     if (root) {
+      const {children} = root.getSnapshot() as {
+        children?: Record<string, AnyActor | undefined>
+      }
+      if (children) {
+        for (const child of Object.values(children)) {
+          if (child) {
+            stopActor(child)
+          }
+        }
+      }
       stopActor(root)
+    }
+  }
+
+  /** Runs a batch, then re-applies `stop` if it landed while the batch was open. */
+  private async runEffects(effects: Effects<TLogic>): Promise<void> {
+    await this.durable.executeEffects(effects)
+    if (this.stopped) {
+      this.stop()
     }
   }
 

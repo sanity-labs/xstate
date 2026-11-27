@@ -505,4 +505,109 @@ describe('an execution that stopped', () => {
     await act(async () => new Promise((resolve) => setTimeout(resolve, 10)))
     expect(calls).toEqual([])
   })
+
+  it('stops invoked children on unmount', async () => {
+    const life: string[] = []
+    const machine = createMachine({
+      schemas: {events: {noop: types<void>()}},
+      invoke: {
+        src: createCallbackLogic(() => {
+          life.push('start')
+          return () => {
+            life.push('stop')
+          }
+        }),
+      },
+      on: {noop: {}},
+    })
+    function App() {
+      useActor(machine)
+      return <p>mounted</p>
+    }
+    const {unmount} = render(<App />)
+    await act(async () => {})
+    expect(life).toEqual(['start'])
+    unmount()
+    await act(async () => {})
+    expect(life).toEqual(['start', 'stop'])
+  })
+
+  it('stops children that an in-flight effect batch starts after stop', async () => {
+    const gate = deferred()
+    const life: string[] = []
+    const machine = createMachine({
+      schemas: {events: {noop: types<void>()}},
+      entry: (_, enq) => {
+        enq(async () => {
+          await gate.promise
+        })
+      },
+      invoke: {
+        src: createCallbackLogic(() => {
+          life.push('start')
+          return () => {
+            life.push('stop')
+          }
+        }),
+      },
+      on: {noop: {}},
+    })
+    function App() {
+      useActor(machine)
+      return <p>mounted</p>
+    }
+    const {unmount} = render(<App />)
+    await act(async () => {})
+    unmount()
+    await act(async () => gate.resolve())
+    // Spawn runs before the gated entry action, so `stop` can tear the child
+    // down before `@xstate.start`; either no start, or start then stop.
+    expect(life.length === 0 || life.at(-1) === 'stop').toBe(true)
+  })
+
+  it('does not leave transition-started children running after stop', async () => {
+    const gate = deferred()
+    const life: string[] = []
+    const machine = createMachine({
+      schemas: {events: {go: types<void>()}},
+      initial: 'idle',
+      states: {
+        idle: {
+          on: {
+            go: (_args, enq) => {
+              enq(async () => {
+                await gate.promise
+              })
+              return {target: 'busy'}
+            },
+          },
+        },
+        busy: {
+          invoke: {
+            src: createCallbackLogic(() => {
+              life.push('start')
+              return () => {
+                life.push('stop')
+              }
+            }),
+          },
+        },
+      },
+    })
+    let send!: ReturnType<typeof useActor<typeof machine>>[1]
+    function App() {
+      const [, _send] = useActor(machine)
+      useLayoutEffect(() => {
+        send = _send
+      })
+      return <p>mounted</p>
+    }
+    const {unmount} = render(<App />)
+    await act(async () => {})
+    act(() => send({type: 'go'}))
+    await act(async () => {})
+    unmount()
+    await act(async () => gate.resolve())
+    expect(life.length === 0 || life.at(-1) === 'stop').toBe(true)
+  })
 })
