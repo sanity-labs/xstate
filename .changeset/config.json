@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/@changesets/config/schema.json",
-  "changelog": ["@changesets/changelog-github", {"repo": "sanity-labs/xstate"}],
+  "changelog": [
+    "@changesets/changelog-github",
+    {"repo": "sanity-labs/xstate", "disableThanks": true}
+  ],
   "access": "public",
   "baseBranch": "main",
   "format": "oxfmt",
