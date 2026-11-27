@@ -1,6 +1,7 @@
-import {useMemo} from 'react'
+import {startTransition, useMemo} from 'react'
 import type {
   Actor,
+  ActorOptions,
   AnyActorLogic,
   ConditionalRequired,
   IsNotNever,
@@ -9,63 +10,53 @@ import type {
   SnapshotFrom,
 } from 'xstate'
 
-import {getStore} from './store'
-import {
-  isActor,
-  recreate,
-  useActorLifecycle,
-  useIdleActorRef,
-  type HookOptions,
-} from './useActorRef'
-import {useStoreSelection} from './useStoreSelection'
-
-function identity<T>(value: T): T {
-  return value
-}
+import {useActorLifecycle, useIdleActorRef} from './actorRef'
+import {useActorSnapshot} from './useActorSnapshot'
 
 /**
- * Creates an actor from `logic` (or uses an already-created `actor`, e.g. from `restoreActor`) and
- * subscribes to its snapshot. Create a passed actor once, e.g.
- * `useState(() => restoreActor(machine, persisted))[0]`.
+ * Creates an actor from `logic`, starts it on mount, stops it on unmount, and returns its snapshot
+ * and a `send` for it.
  *
- * The snapshot is held in React state, and this hook is the only subscriber that puts it there.
- * `send` sends in a transition: the one it is called in, or a transition of its own. For an update
- * that must show right away, like a controlled input's `onChange`, use `useOptimisticSend(actor)`.
+ * Every snapshot change renders as a transition. `send` sends in a transition: the one it is called
+ * in, or a transition of its own. For UI that must update right away, like a controlled input, hold
+ * the value with `useOptimistic` in the component that renders it, and call `send` from the action
+ * that sets it.
  *
- * The logic passed on the first render is used for the component's lifetime, and `input` is read
- * once. To start over, or to switch to a different machine, change the component's `key`.
+ * The logic passed on the first render is used for the component's lifetime, and `options` are
+ * read once. To start over, or to switch to a different machine, change the component's `key`.
  *
  * @public
  */
 export function useActor<TLogic extends AnyActorLogic>(
-  actor: Actor<TLogic>,
-): [SnapshotFrom<TLogic>, Actor<TLogic>['send'], Actor<TLogic>]
-/** @public */
-export function useActor<TLogic extends AnyActorLogic>(
   logic: TLogic,
   ...[options]: ConditionalRequired<
-    [options?: HookOptions<TLogic> & RequiredActorOptionsFor<TLogic>],
+    [options?: ActorOptions<TLogic> & RequiredActorOptionsFor<TLogic>],
     IsNotNever<RequiredActorOptionsKeys<TLogic>>
   >
-): [SnapshotFrom<TLogic>, Actor<TLogic>['send'], Actor<TLogic>]
+): [SnapshotFrom<TLogic>, Actor<TLogic>['send']]
 export function useActor<TLogic extends AnyActorLogic>(
-  logic: TLogic | Actor<TLogic>,
-  options?: HookOptions<TLogic>,
-): [SnapshotFrom<TLogic>, Actor<TLogic>['send'], Actor<TLogic>] {
-  const readyActor = isActor(logic)
-  if (!readyActor && !!logic && 'send' in logic && typeof logic.send === 'function') {
+  logic: TLogic,
+  options?: ActorOptions<TLogic>,
+): [SnapshotFrom<TLogic>, Actor<TLogic>['send']] {
+  if (!!logic && 'send' in logic && typeof logic.send === 'function') {
     throw new Error(
-      `useActor() expects actor logic (e.g. a machine), but received an ActorRef. Pass an Actor created with createActor()/restoreActor(), or use the useSelector(actorRef, ...) hook to read an ActorRef's snapshot.`,
+      `useActor() expects actor logic (e.g. a machine), but received an actor. Pass the logic it was created from instead.`,
     )
   }
 
   const [actorRef, setActorRef] = useIdleActorRef(logic, options)
-  const store = useMemo(() => getStore(actorRef), [actorRef])
-  const snapshot = useStoreSelection(store, identity, Object.is) as SnapshotFrom<TLogic>
-
-  useActorLifecycle(actorRef, setActorRef, () =>
-    recreate(actorRef, readyActor ? actorRef.options : options),
+  const snapshot = useActorSnapshot(actorRef)
+  const send = useMemo(
+    () =>
+      ((event: unknown) => {
+        startTransition(() => {
+          actorRef.send(event as never)
+        })
+      }) as Actor<TLogic>['send'],
+    [actorRef],
   )
 
-  return [snapshot, store.send as Actor<TLogic>['send'], actorRef]
+  useActorLifecycle(actorRef, setActorRef, options)
+
+  return [snapshot, send]
 }

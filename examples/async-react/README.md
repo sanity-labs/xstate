@@ -6,8 +6,9 @@ rebuilt on XState v6 and `@sanity-labs/xstate-react`.
 
 The behavior is the same: on a fast network the app feels synchronous, and as the network slows it
 shows delayed loading states, keeps the current page on screen while the next one loads, and
-animates between pages with view transitions. The design components are unchanged apart from taking
-controlled values, so the differences are in the router, the forms and the network debugger.
+animates between pages with view transitions. The design components are the original's, except
+that `LoginForm` keeps its fields with `useOptimistic` and calls a `changeAction`, so the
+differences are in the router, the forms and the network debugger.
 
 ## Run it
 
@@ -24,63 +25,48 @@ through the [Navigation API](https://developer.mozilla.org/docs/Web/API/Navigati
 
 ## What it shows
 
-**The router is a machine.** The location, the search box's text and a refresh revision live in one
-actor, provided once with `createActorContext`. Every event is a transition, so navigating, changing
-tabs, searching and refreshing keep the current page on screen until the next one is ready. Each
-component selects only what it renders:
+**The router is a machine.** The location and a refresh revision live in one actor, which
+`RouterProvider` runs with `useActor` and shares through a context. Every event is a transition, so
+navigating, changing tabs, searching and refreshing keep the current page on screen until the next
+one is ready:
 
 ```tsx
-import {createActorContext, shallowEqual} from '@sanity-labs/xstate-react'
-import {use} from 'react'
+import {useActor} from '@sanity-labs/xstate-react'
 
-export const Router = createActorContext(routerMachine)
+export function RouterProvider({children}: {children: ReactNode}) {
+  const [input] = useState(() => ({location: parseLocation(window.location.href)}))
+  const [snapshot, send] = useActor(routerMachine, {input})
+  const {location, revision} = snapshot.context
+  const router = useMemo(() => ({location, revision, send}), [location, revision, send])
+  return <RouterContext value={router}>{children}</RouterContext>
+}
 
 function LessonList() {
-  const query = Router.useSelector(
-    ({context}) => ({
-      tab: context.location.tab,
-      q: context.location.q,
-      revision: context.revision,
-    }),
-    shallowEqual,
-  )
-  const lessons = use(data.lessons(query))
+  const {location, revision} = useRouter()
+  const lessons = use(data.lessons({tab: location.tab, q: location.q, revision}))
   // ...
 }
 ```
 
-**Controlled inputs stay responsive.** The search box sends its text with `useOptimisticSend`, so
-each keystroke shows at once while the search it starts loads in a transition. The login form is a
-tiny machine of its own, driven the same way.
+**Controlled inputs stay responsive.** As in the original, `SearchInput`, `TabList` and
+`CompleteButton` hold what must show right away with `useOptimistic`, and call an action prop inside
+a transition. The router only sends:
 
 ```tsx
-function Search() {
-  const send = Router.useSend()
-  const sendOptimistic = Router.useOptimisticSend()
-  const {draft, q} = Router.useSelector(
-    ({context}) => ({draft: context.draft, q: context.location.q}),
-    shallowEqual,
-  )
-
+function Home() {
+  const {location, send} = useRouter()
   return (
-    <SearchInput
-      value={draft}
-      isPending={draft !== q}
-      onChange={(value) => {
-        sendOptimistic({type: 'search.change', value})
-        send({type: 'search.submit'})
-      }}
-    />
+    <Design.SearchInput value={location.q} changeAction={(q) => send({type: 'search.change', q})} />
   )
 }
 ```
 
-**Some state should not wait.** The network debugger renders requests as they start, even while
-the transition waiting on them is suspended, by opting its actor into synchronous updates:
+The login form is a tiny machine of its own, and `LoginForm` keeps its fields with `useOptimistic`
+the same way.
 
-```tsx
-const Network = createActorContext(networkMachine, {updates: 'sync'})
-```
+**Some state should not wait.** The network debugger shows each request as it starts, even while
+the transition waiting on it is suspended. Each request is added with `useOptimistic` by an action
+that lasts as long as the request, while the latency settings live in a machine.
 
 **Transition types pick the animation.** Back and forward send the router event inside a transition
 tagged `navigation-back` or `navigation-forward`, and the page's `<ViewTransition>` slides in that

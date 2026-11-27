@@ -1,9 +1,9 @@
 import {act, render, screen} from '@testing-library/react'
 import {Activity, Suspense, use, useEffect} from 'react'
 import {describe, expect, it} from 'vitest'
-import {createMachine, types, type Actor} from 'xstate'
+import {createMachine, types, type AnyActorRef} from 'xstate'
 
-import {createActorContext, useActor} from '../index'
+import {useActor} from '../index'
 import {deferred} from './helpers'
 
 const stepMachine = createMachine({
@@ -93,48 +93,40 @@ describe('useActor', () => {
   })
 })
 
+const seen = new Set<AnyActorRef>()
+
 const counterMachine = createMachine({
   schemas: {context: types<{count: number}>(), events: {inc: types<void>()}},
   context: {count: 0},
+  entry: ({self}, enq) => enq(() => seen.add(self)),
   on: {inc: ({context}) => ({context: {count: context.count + 1}})},
 })
 
-const ProvidedCounter = createActorContext(counterMachine)
-
-function ProvidedCount() {
-  const count = ProvidedCounter.useSelector((snapshot) => snapshot.context.count)
-  const send = ProvidedCounter.useSend()
+function Count({count, send}: {count: number; send: () => void}) {
   return (
-    <button type="button" onClick={() => send({type: 'inc'})}>
+    <button type="button" onClick={send}>
       {count}
     </button>
   )
 }
 
-function ProvidedApp({mode}: {mode: 'visible' | 'hidden'}) {
+function OwnerApp({mode}: {mode: 'visible' | 'hidden'}) {
+  const [snapshot, send] = useActor(counterMachine)
   return (
-    <ProvidedCounter.Provider>
-      <Activity mode={mode}>
-        <ProvidedCount />
-      </Activity>
-    </ProvidedCounter.Provider>
+    <Activity mode={mode}>
+      <Count count={snapshot.context.count} send={() => send({type: 'inc'})} />
+    </Activity>
   )
+}
+
+function Counter() {
+  const [snapshot, send] = useActor(counterMachine)
+  return <Count count={snapshot.context.count} send={() => send({type: 'inc'})} />
 }
 
 describe('Activity', () => {
   it('stops the actor when hidden, and starts a fresh one when shown again', async () => {
-    const seen = new Set<Actor<typeof counterMachine>>()
-    function Counter() {
-      const [snapshot, send, actor] = useActor(counterMachine)
-      useEffect(() => {
-        seen.add(actor)
-      }, [actor])
-      return (
-        <button type="button" onClick={() => send({type: 'inc'})}>
-          {snapshot.context.count}
-        </button>
-      )
-    }
+    seen.clear()
     const {rerender} = render(
       <Activity mode="visible">
         <Counter />
@@ -165,14 +157,14 @@ describe('Activity', () => {
     expect(text()).toBe('0')
   })
 
-  it('keeps an actor provided from outside the boundary running', async () => {
-    const {rerender} = render(<ProvidedApp mode="visible" />)
+  it('keeps an actor owned outside the boundary running', async () => {
+    const {rerender} = render(<OwnerApp mode="visible" />)
     await act(async () => screen.getByRole('button').click())
     expect(text()).toBe('1')
 
-    rerender(<ProvidedApp mode="hidden" />)
+    rerender(<OwnerApp mode="hidden" />)
     await act(async () => {})
-    rerender(<ProvidedApp mode="visible" />)
+    rerender(<OwnerApp mode="visible" />)
     await act(async () => {})
     expect(text()).toBe('1')
   })

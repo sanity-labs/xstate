@@ -1,21 +1,12 @@
-import {shallowEqual} from '@sanity-labs/xstate-react'
 import {Suspense, use, ViewTransition} from 'react'
 
 import * as data from '@/data/index'
 import * as Design from '@/design'
-import {Router} from '@/router/index'
+import {useRouter} from '@/router/index'
 
 function LessonList() {
-  const query = Router.useSelector(
-    ({context}) => ({
-      tab: context.location.tab,
-      q: context.location.q,
-      revision: context.revision,
-    }),
-    shallowEqual,
-  )
-  const send = Router.useSend()
-  const lessons = use(data.lessons(query))
+  const {location, revision, send} = useRouter()
+  const lessons = use(data.lessons({tab: location.tab, q: location.q, revision}))
 
   async function completeAction(id: string) {
     await data.toggleLesson(id)
@@ -54,27 +45,16 @@ function LessonList() {
 }
 
 export default function Home() {
-  const send = Router.useSend()
-  const sendOptimistic = Router.useOptimisticSend()
-  const {draft, q, tab} = Router.useSelector(
-    ({context}) => ({draft: context.draft, q: context.location.q, tab: context.location.tab}),
-    shallowEqual,
-  )
+  const {location, send} = useRouter()
 
   return (
     <>
       <Design.SearchInput
-        value={draft}
-        isPending={draft !== q}
-        onChange={(value) => {
-          // Only the text is previewed: a preview of the search would suspend the list outside of
-          // a transition, and replace it with the fallback.
-          sendOptimistic({type: 'search.change', value})
-          send({type: 'search.submit'})
-        }}
+        value={location.q}
+        changeAction={(q) => send({type: 'search.change', q})}
       />
       <Design.TabList
-        activeTab={tab}
+        activeTab={location.tab}
         changeAction={(value) => send({type: 'tab.change', tab: value})}
       >
         {/* Shown only on the first load: later searches and tabs render in transitions, which keep

@@ -5,10 +5,9 @@
 import {render, screen} from '@testing-library/react'
 import * as React from 'react'
 import {describe, expect, it} from 'vitest'
-import {createActor, createCallbackLogic, createMachine, setup, types} from 'xstate'
-import {restoreActor} from 'xstate/persist'
+import {createCallbackLogic, createMachine, setup, types} from 'xstate'
 
-import {useMachine} from '../../index'
+import {useActor} from '../../index'
 
 describe('lifecycle', () => {
   it('#5272 an invoked callback starts once under StrictMode', () => {
@@ -26,7 +25,7 @@ describe('lifecycle', () => {
     })
 
     function App() {
-      useMachine(appMachine)
+      useActor(appMachine)
       return null
     }
 
@@ -55,7 +54,7 @@ describe('lifecycle', () => {
     })
 
     function App() {
-      useMachine(rootMachine)
+      useActor(rootMachine)
       return null
     }
 
@@ -83,7 +82,7 @@ describe('lifecycle', () => {
     })
 
     function Counter() {
-      const [current, send] = useMachine(counterMachine)
+      const [current, send] = useActor(counterMachine)
       const ref = React.useCallback(
         (node: HTMLElement | null) => {
           if (node) {
@@ -103,35 +102,5 @@ describe('lifecycle', () => {
 
     // React 19 invokes the callback ref twice under StrictMode
     expect(screen.getByText(/count:/).textContent).toBe('count: 2')
-  })
-})
-
-describe('types', () => {
-  it('#5480 useMachine accepts persisted and live snapshots', () => {
-    const machine = createMachine({
-      initial: 'a',
-      states: {a: {on: {NEXT: {target: 'b'}}}, b: {}},
-    })
-    const actor = createActor(machine).start()
-    actor.send({type: 'NEXT'})
-    const persisted = actor.getPersistedSnapshot()
-    const live = actor.getSnapshot()
-    const fromStorage = JSON.parse(JSON.stringify(persisted))
-
-    function App() {
-      const [actors] = React.useState(() => [
-        restoreActor(machine, persisted),
-        restoreActor(machine, live),
-        restoreActor(machine, fromStorage),
-      ])
-      const [a] = useMachine(actors[0])
-      const [b] = useMachine(actors[1])
-      const [c] = useMachine(actors[2])
-      return <div data-testid="values">{[a.value, b.value, c.value].join(',')}</div>
-    }
-
-    render(<App />)
-
-    expect(screen.getByTestId('values').textContent).toBe('b,b,b')
   })
 })

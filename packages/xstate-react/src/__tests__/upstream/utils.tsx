@@ -2,6 +2,8 @@ import * as RTL from '@testing-library/react'
 import * as React from 'react'
 import {describe} from 'vitest'
 
+import {useActorLifecycle, useIdleActorRef} from '../../actorRef'
+
 // TS trips over signatures with generic overloads when using bare `typeof RTL.render`
 // conditional types just resolve the last overload
 // and that is enough for us here
@@ -30,4 +32,11 @@ export function describeEachReactMode(
       },
     })
   })
+}
+
+/** The actor `useActor` owns, for tests that read it directly. */
+export function useActorRef(machine: any) {
+  const [actorRef, setActorRef] = useIdleActorRef(machine, undefined)
+  useActorLifecycle(actorRef, setActorRef, undefined)
+  return actorRef
 }

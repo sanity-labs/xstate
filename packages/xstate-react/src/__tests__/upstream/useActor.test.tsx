@@ -7,10 +7,9 @@ import {BehaviorSubject} from 'rxjs'
 import {afterEach, expect, it, vi} from 'vitest'
 import {Actor, Snapshot, SnapshotFrom, createActor, createMachine} from 'xstate'
 import {createCallbackLogic, createObservableLogic, createAsyncLogic} from 'xstate'
-import {restoreActor} from 'xstate/persist'
 import z from 'zod'
 
-import {useActor, useSelector} from '../../index'
+import {useActor} from '../../index'
 import {describeEachReactMode} from './utils'
 
 afterEach(() => {
@@ -80,43 +79,20 @@ describeEachReactMode('useActor (%s)', ({suiteKey, render}) => {
     },
   })
 
-  const actorRef = createActor(
-    fetchMachine.provide({
-      actors: {
-        fetchData: createMachine({
-          initial: 'done',
-          states: {
-            done: {
-              type: 'final',
-            },
-          },
-          output: 'persisted data',
-        }) as any,
-      },
-    }),
-  ).start()
-  actorRef.send({type: 'FETCH'})
-
-  const persistedSuccessFetchState = actorRef.getPersistedSnapshot()
-
   const Fetcher: React.FC<{
     onFetch: () => Promise<any>
-    persistedState?: Snapshot<unknown>
   }> = ({
     onFetch = () => {
       return new Promise((res) => res('some data'))
     },
-    persistedState,
   }) => {
-    const [actor] = useState(() => {
-      const logic = fetchMachine.provide({
+    const [current, send] = useActor(
+      fetchMachine.provide({
         actors: {
           fetchData: createAsyncLogic({run: onFetch}) as any,
         },
-      })
-      return persistedState ? restoreActor(logic, persistedState) : createActor(logic)
-    })
-    const [current, send] = useActor(actor)
+      }),
+    )
 
     switch (current.value) {
       case 'idle':
@@ -142,47 +118,6 @@ describeEachReactMode('useActor (%s)', ({suiteKey, render}) => {
     await screen.findByText(/Success/)
     const dataEl = screen.getByTestId('data')
     expect(dataEl.textContent).toBe('fake data')
-  })
-
-  it('should work with the useActor hook (rehydrated state)', async () => {
-    render(
-      <Fetcher
-        onFetch={() => new Promise((res) => res('fake data'))}
-        persistedState={persistedSuccessFetchState}
-      />,
-    )
-
-    await screen.findByText(/Success/)
-    const dataEl = screen.getByTestId('data')
-    expect(dataEl.textContent).toBe('persisted data')
-  })
-
-  it('should work with the useMachine hook (rehydrated state config)', async () => {
-    const persistedFetchStateConfig = JSON.parse(JSON.stringify(persistedSuccessFetchState))
-    render(
-      <Fetcher
-        onFetch={() => new Promise((res) => res('fake data'))}
-        persistedState={persistedFetchStateConfig}
-      />,
-    )
-
-    await screen.findByText(/Success/)
-    const dataEl = screen.getByTestId('data')
-    expect(dataEl.textContent).toBe('persisted data')
-  })
-
-  it('should provide the service', () => {
-    const Test = () => {
-      const [, , service] = useActor(fetchMachine)
-
-      if (!(service instanceof Actor)) {
-        throw new Error('service not instance of Interpreter')
-      }
-
-      return null
-    }
-
-    render(<Test />)
   })
 
   it('should accept input and provide it to the context factory', () => {
@@ -771,7 +706,7 @@ describeEachReactMode('useActor (%s)', ({suiteKey, render}) => {
 
     const Test = () => {
       const [state] = useActor(machine)
-      const childState = useSelector(state.children.test!, (s) => s)
+      const childState = state.children.test!.getSnapshot()
 
       expect(childState.context.value).toBe(42)
 
@@ -779,64 +714,6 @@ describeEachReactMode('useActor (%s)', ({suiteKey, render}) => {
     }
 
     render(<Test />)
-  })
-
-  // https://github.com/statelyai/xstate/issues/1334
-  it('delayed transitions should work when initializing from a rehydrated state', () => {
-    vi.useFakeTimers()
-    const testMachine = createMachine({
-      // types: {} as {
-      //   events: {
-      //     type: 'START';
-      //   };
-      // },
-      schemas: {
-        events: z.object({
-          type: z.literal('START'),
-        }) as any,
-      },
-      id: 'app',
-      initial: 'idle',
-      states: {
-        idle: {
-          on: {
-            START: {target: 'doingStuff'},
-          },
-        },
-        doingStuff: {
-          id: 'doingStuff',
-          after: {
-            100: {target: 'idle'},
-          },
-        },
-      },
-    })
-
-    const actorRef = createActor(testMachine).start()
-    const persistedState = JSON.stringify(actorRef.getPersistedSnapshot())
-    actorRef.stop()
-
-    let currentState: SnapshotFrom<typeof testMachine>
-
-    const Test = () => {
-      const [actor] = useState(() => restoreActor(testMachine, JSON.parse(persistedState)))
-      const [state, send] = useActor(actor)
-
-      currentState = state
-
-      return <button onClick={() => send({type: 'START'})} data-testid="button"></button>
-    }
-
-    render(<Test />)
-
-    const button = screen.getByTestId('button')
-
-    fireEvent.click(button)
-    act(() => {
-      vi.advanceTimersByTime(110)
-    })
-
-    expect(currentState!.matches('idle')).toBe(true)
   })
 
   it('should not miss initial synchronous updates', () => {

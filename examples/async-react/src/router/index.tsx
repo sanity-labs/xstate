@@ -1,16 +1,37 @@
-import {createActorContext} from '@sanity-labs/xstate-react'
+import {useActor} from '@sanity-labs/xstate-react'
 import {
   addTransitionType,
+  createContext,
   startTransition,
+  use,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from 'react'
 
 import {routerMachine, toHref, type Location} from './machine'
 
-export const Router = createActorContext(routerMachine)
+type RouterSend = ReturnType<typeof useActor<typeof routerMachine>>[1]
+
+interface Router {
+  location: Location
+  /** Increases on every refresh, so the route's data is fetched again. */
+  revision: number
+  send: RouterSend
+}
+
+const RouterContext = createContext<Router | null>(null)
+
+/** The router's location and revision, and its `send`, which sends in a transition. */
+export function useRouter(): Router {
+  const router = use(RouterContext)
+  if (!router) {
+    throw new Error('useRouter() must be used inside <RouterProvider>')
+  }
+  return router
+}
 
 function parseLocation(href: string): Location {
   const url = new URL(href)
@@ -25,10 +46,7 @@ function parseLocation(href: string): Location {
  * Keeps the browser's history in step with the router. A new location is pushed once React has
  * committed it, so the address bar never shows a page that is still loading.
  */
-function HistorySync() {
-  const send = Router.useSend()
-  const href = Router.useSelector(({context}) => toHref(context.location))
-
+function HistorySync({href, send}: {href: string; send: RouterSend}) {
   useLayoutEffect(() => {
     if (href !== toHref(parseLocation(window.location.href))) {
       window.history.pushState(null, '', href)
@@ -76,10 +94,14 @@ function HistorySync() {
 
 export function RouterProvider({children}: {children: ReactNode}) {
   const [input] = useState(() => ({location: parseLocation(window.location.href)}))
+  const [snapshot, send] = useActor(routerMachine, {input})
+  const {location, revision} = snapshot.context
+  const router = useMemo(() => ({location, revision, send}), [location, revision, send])
+
   return (
-    <Router.Provider options={{input}}>
-      <HistorySync />
+    <RouterContext value={router}>
+      <HistorySync href={toHref(location)} send={send} />
       {children}
-    </Router.Provider>
+    </RouterContext>
   )
 }

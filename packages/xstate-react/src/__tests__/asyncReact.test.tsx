@@ -3,7 +3,7 @@ import {startTransition, Suspense, use, useOptimistic, type ReactNode} from 'rea
 import {describe, expect, it} from 'vitest'
 import {createMachine, types} from 'xstate'
 
-import {createActorContext} from '../index'
+import {useActor} from '../index'
 import {deferred} from './helpers'
 
 // The design components of the Async React demo: they own their optimistic state and call an
@@ -74,17 +74,22 @@ const routerMachine = createMachine({
     'params.set': ({context, event}) => ({context: {...context, [event.key]: event.value}}),
   },
 })
-const Router = createActorContext(routerMachine)
 
-function Lessons({lessons}: {lessons: (q: string, tab: string) => Promise<string>}) {
-  const {q, tab} = Router.useSelector((snapshot) => snapshot.context)
+function Lessons({
+  q,
+  tab,
+  lessons,
+}: {
+  q: string
+  tab: string
+  lessons: (q: string, tab: string) => Promise<string>
+}) {
   return <p data-testid="lessons">{use(lessons(q, tab))}</p>
 }
 
 function Home({lessons}: {lessons: (q: string, tab: string) => Promise<string>}) {
-  const q = Router.useSelector((snapshot) => snapshot.context.q)
-  const tab = Router.useSelector((snapshot) => snapshot.context.tab)
-  const send = Router.useSend()
+  const [snapshot, send] = useActor(routerMachine)
+  const {q, tab} = snapshot.context
   return (
     <>
       <SearchInput
@@ -96,7 +101,7 @@ function Home({lessons}: {lessons: (q: string, tab: string) => Promise<string>})
         changeAction={(value) => send({type: 'params.set', key: 'tab', value})}
       >
         <Suspense fallback={<p data-testid="fallback" />}>
-          <Lessons lessons={lessons} />
+          <Lessons q={q} tab={tab} lessons={lessons} />
         </Suspense>
       </TabList>
     </>
@@ -123,13 +128,7 @@ describe('the Async React demo design components', () => {
       return promise
     }
 
-    await act(async () =>
-      render(
-        <Router.Provider>
-          <Home lessons={lessons} />
-        </Router.Provider>,
-      ),
-    )
+    await act(async () => render(<Home lessons={lessons} />))
     expect(screen.getByTestId('lessons').textContent).toBe('all:')
 
     const input = screen.getByLabelText<HTMLInputElement>('search')

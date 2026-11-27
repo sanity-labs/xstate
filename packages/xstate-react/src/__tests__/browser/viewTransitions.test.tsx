@@ -8,9 +8,8 @@ import {
   ViewTransition,
 } from 'react'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
-import {createActor} from 'xstate'
 
-import {createActorContext, useActor} from '../../index'
+import {useActor} from '../../index'
 import {counterMachine, deferred} from '../helpers'
 
 interface Observed {
@@ -62,10 +61,7 @@ function observeViewTransitions() {
   }
 }
 
-const Counter = createActorContext(counterMachine)
-
-function Count({id}: {id: string}) {
-  const count = Counter.useSelector((snapshot) => snapshot.context.count)
+function Count({id, count}: {id: string; count: number}) {
   return (
     <ViewTransition>
       <p data-testid={id}>{count}</p>
@@ -74,25 +70,24 @@ function Count({id}: {id: string}) {
 }
 
 function renderCounter() {
-  const actor = createActor(counterMachine)
   let send!: (event: {type: 'inc'}) => void
-  function Controls() {
-    const counterSend = Counter.useSend()
+  function App() {
+    const [snapshot, counterSend] = useActor(counterMachine)
     useLayoutEffect(() => {
       send = counterSend
     })
-    return null
+    const {count} = snapshot.context
+    return (
+      <>
+        <Count id="a" count={count} />
+        <section>
+          <Count id="b" count={count} />
+        </section>
+      </>
+    )
   }
-  render(
-    <Counter.Provider actor={actor}>
-      <Count id="a" />
-      <section>
-        <Count id="b" />
-      </section>
-      <Controls />
-    </Counter.Provider>,
-  )
-  return {actor, send: (event: {type: 'inc'}) => send(event)}
+  render(<App />)
+  return {send: (event: {type: 'inc'}) => send(event)}
 }
 
 describe('transition types in a real view transition', () => {
@@ -117,17 +112,6 @@ describe('transition types in a real view transition', () => {
     startTransition(() => {
       send({type: 'inc'})
       addTransitionType('forward')
-    })
-    const [transition] = await viewTransitions.finished(1)
-    expect(transition).toEqual({types: ['forward'], active: ['forward']})
-  })
-
-  it('reach the browser with `actor.send`', async () => {
-    const {actor} = renderCounter()
-
-    startTransition(() => {
-      addTransitionType('forward')
-      actor.send({type: 'inc'})
     })
     const [transition] = await viewTransitions.finished(1)
     expect(transition).toEqual({types: ['forward'], active: ['forward']})

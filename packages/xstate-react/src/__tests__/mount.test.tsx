@@ -2,18 +2,16 @@ import {act, render, screen} from '@testing-library/react'
 import {Activity, startTransition, Suspense, use, useLayoutEffect, useState} from 'react'
 import {describe, expect, it} from 'vitest'
 
-import {createActorContext, useSelector} from '../index'
+import {useActor} from '../index'
 import {counterMachine, deferred} from './helpers'
 
-const Counter = createActorContext(counterMachine)
+type Send = ReturnType<typeof useActor<typeof counterMachine>>[1]
 
-function Count({id}: {id: string}) {
-  const count = Counter.useSelector((snapshot) => snapshot.context.count)
+function Count({id, count}: {id: string; count: number}) {
   return <span data-testid={id}>{count}</span>
 }
 
-function Gate({promise}: {promise: Promise<void>}) {
-  const count = Counter.useSelector((snapshot) => snapshot.context.count)
+function Gate({count, promise}: {count: number; promise: Promise<void>}) {
   if (count > 0) {
     use(promise)
   }
@@ -22,27 +20,28 @@ function Gate({promise}: {promise: Promise<void>}) {
 
 function setup(gate: Promise<void>) {
   const controls = {} as {
-    send: ReturnType<typeof Counter.useSend>
+    send: Send
     mount: (mounted: boolean) => void
   }
-  function Controls() {
-    const send = Counter.useSend()
+  function App() {
+    const [snapshot, send] = useActor(counterMachine)
     const [mounted, setMounted] = useState(false)
     useLayoutEffect(() => {
       controls.send = send
       controls.mount = setMounted
     }, [send])
-    return mounted ? <Count id="late" /> : null
+    const {count} = snapshot.context
+    return (
+      <>
+        <Count id="early" count={count} />
+        <Suspense fallback={null}>
+          <Gate count={count} promise={gate} />
+        </Suspense>
+        {mounted ? <Count id="late" count={count} /> : null}
+      </>
+    )
   }
-  render(
-    <Counter.Provider>
-      <Count id="early" />
-      <Suspense fallback={null}>
-        <Gate promise={gate} />
-      </Suspense>
-      <Controls />
-    </Counter.Provider>,
-  )
+  render(<App />)
   return controls
 }
 
@@ -108,44 +107,43 @@ describe('a component mounting while a transition is changing the actor', () => 
 
 const replaced = {} as {
   setKept: (kept: string) => void
-  actor: ReturnType<typeof Counter.useActorRef>
+  send: Send
 }
 
-function KeptChild() {
+function Kept() {
   const [kept, setKept] = useState('')
-  const count = Counter.useSelector((snapshot) => snapshot.context.count)
-  const actor = Counter.useActorRef()
-  const selected = useSelector(actor, (snapshot) => snapshot.context.count)
+  const [snapshot, send] = useActor(counterMachine)
   useLayoutEffect(() => {
     replaced.setKept = setKept
-    replaced.actor = actor
-  }, [actor])
-  return <span data-testid="child">{`${kept}${count}${selected}`}</span>
+    replaced.send = send
+  }, [send])
+  return <span data-testid="kept">{`${kept}${snapshot.context.count}`}</span>
 }
 
 function ActivityApp({mode}: {mode: 'visible' | 'hidden'}) {
   return (
     <Activity mode={mode}>
-      <Counter.Provider>
-        <KeptChild />
-      </Counter.Provider>
+      <Kept />
     </Activity>
   )
 }
 
-describe('a provider whose stopped actor is replaced', () => {
-  it('keeps the state of its subtree, and its readers read the new actor', async () => {
+describe('a component whose stopped actor is replaced', () => {
+  it('keeps its other state, and reads and sends to the new actor', async () => {
     const {rerender} = render(<ActivityApp mode="visible" />)
-    const first = replaced.actor
+    const firstSend = replaced.send
     await act(async () => {
       replaced.setKept('kept')
-      first.send({type: 'inc'})
+      firstSend({type: 'inc'})
     })
-    expect(screen.getByTestId('child').textContent).toBe('kept11')
+    expect(screen.getByTestId('kept').textContent).toBe('kept1')
 
     await act(async () => rerender(<ActivityApp mode="hidden" />))
     await act(async () => rerender(<ActivityApp mode="visible" />))
-    expect(replaced.actor).not.toBe(first)
-    expect(screen.getByTestId('child').textContent).toBe('kept00')
+    expect(replaced.send).not.toBe(firstSend)
+    expect(screen.getByTestId('kept').textContent).toBe('kept0')
+
+    await act(async () => replaced.send({type: 'inc'}))
+    expect(screen.getByTestId('kept').textContent).toBe('kept1')
   })
 })

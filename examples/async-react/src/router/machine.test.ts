@@ -28,35 +28,24 @@ describe('toHref', () => {
 })
 
 describe('routerMachine', () => {
-  test('starts with the search box showing the query', () => {
-    const router = startRouter('/?q=sus')
-    expect(router.getSnapshot().context.draft).toBe('sus')
-  })
-
-  test('only searches once the draft is submitted', () => {
+  test('searches within the current tab', () => {
     const router = startRouter('/?tab=wip')
-    router.send({type: 'search.change', value: 'act'})
-    expect(router.getSnapshot().context.draft).toBe('act')
-    expect(currentHref(router)).toBe('/?tab=wip')
-
-    router.send({type: 'search.submit'})
+    router.send({type: 'search.change', q: 'act'})
     expect(currentHref(router)).toBe('/?q=act&tab=wip')
   })
 
   test('navigating resets the search and tab', () => {
     const router = startRouter('/login')
     router.send({type: 'tab.change', tab: 'done'})
-    router.send({type: 'search.change', value: 'act'})
+    router.send({type: 'search.change', q: 'act'})
     router.send({type: 'navigate', path: '/'})
     expect(currentHref(router)).toBe('/')
-    expect(router.getSnapshot().context.draft).toBe('')
   })
 
-  test('traversing history restores the search box', () => {
+  test('traversing history restores the location', () => {
     const router = startRouter('/')
-    router.send({type: 'search.change', value: 'unsent'})
+    router.send({type: 'search.change', q: 'unsent'})
     router.send({type: 'history.traverse', location: {path: '/', q: 'sus', tab: 'all'}})
-    expect(router.getSnapshot().context.draft).toBe('sus')
     expect(currentHref(router)).toBe('/?q=sus')
   })
 

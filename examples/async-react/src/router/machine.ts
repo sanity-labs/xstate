@@ -23,39 +23,34 @@ export const routerMachine = createMachine({
     input: types<{location: Location}>(),
     context: types<{
       location: Location
-      /** The search box's text. It leads `location.q` while a search is loading. */
-      draft: string
       /** Increases on every refresh, so the route's data is fetched again. */
       revision: number
     }>(),
     events: {
       'navigate': types<{path: string}>(),
       'tab.change': types<{tab: string}>(),
-      'search.change': types<{value: string}>(),
-      'search.submit': types<void>(),
+      'search.change': types<{q: string}>(),
       'refresh': types<void>(),
       'history.traverse': types<{location: Location}>(),
     },
   },
   context: ({input}) => ({
     location: input.location,
-    draft: input.location.q,
     revision: 0,
   }),
   on: {
     'navigate': ({event}) => ({
-      context: {location: {path: event.path, q: '', tab: 'all'}, draft: ''},
+      context: {location: {path: event.path, q: '', tab: 'all'}},
     }),
     'tab.change': ({context, event}) => ({
       context: {location: {...context.location, tab: event.tab}},
     }),
-    'search.change': ({event}) => ({context: {draft: event.value}}),
-    'search.submit': ({context}) => ({
-      context: {location: {...context.location, q: context.draft}},
+    'search.change': ({context, event}) => ({
+      context: {location: {...context.location, q: event.q}},
     }),
     'refresh': ({context}) => ({context: {revision: context.revision + 1}}),
     'history.traverse': ({event}) => ({
-      context: {location: event.location, draft: event.location.q},
+      context: {location: event.location},
     }),
   },
 })

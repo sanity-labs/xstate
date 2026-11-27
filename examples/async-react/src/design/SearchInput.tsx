@@ -1,4 +1,5 @@
 import {SearchIcon} from 'lucide-react'
+import {startTransition, useOptimistic} from 'react'
 
 import {InputGroup, InputGroupAddon, InputGroupInput} from '@/components/ui/input-group'
 import {Spinner} from '@/components/ui/spinner'
@@ -8,20 +9,28 @@ import ButtonShimmer from './ButtonShimmer'
 
 export default function SearchInput({
   value,
-  isPending,
-  onChange,
+  changeAction,
 }: {
   value: string
-  isPending: boolean
-  onChange: (value: string) => void
+  changeAction: (value: string) => void | Promise<void>
 }) {
+  const [inputValue, setInputValue] = useOptimistic(value)
+  const isPending = inputValue !== value
+
+  function handleChange(newValue: string) {
+    startTransition(async () => {
+      setInputValue(newValue)
+      await changeAction(newValue)
+    })
+  }
+
   return (
     <div className="px-8">
       <InputGroup className="relative overflow-hidden">
         <InputGroupInput
           placeholder="Search..."
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          value={inputValue}
+          onChange={(event) => handleChange(event.target.value)}
         />
         <InputGroupAddon>
           <SearchIcon />
