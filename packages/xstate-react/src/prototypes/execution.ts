@@ -23,6 +23,8 @@ import {
  */
 
 const RESET = {type: 'xstate.react.reset'} as const
+/** Re-enters a rejected `start()` through the action queue so mount failures disable `dispatch`. */
+const FAIL = {type: 'xstate.react.fail'} as const
 
 export type Clock = NonNullable<ActorOptions<AnyActorLogic>['clock']>
 export type Dispatch = (event: unknown) => void
@@ -217,7 +219,14 @@ export class Host<TLogic extends AnyActorLogic> {
         startTransition(() => dispatch(RESET))
       }
     } else {
-      void this.execution.start()
+      // Keep the happy path off the action queue so mount does not flip `isPending`. A throw is
+      // caught and re-entered as FAIL so it rejects an action like a throwing `send` effect.
+      void this.execution.start().catch(() => {
+        const dispatch = this.dispatch
+        if (dispatch) {
+          startTransition(() => dispatch(FAIL))
+        }
+      })
     }
     return () => {
       // Stopping waits a microtask so that StrictMode's simulated unmount and remount keeps the
@@ -247,11 +256,21 @@ export class Host<TLogic extends AnyActorLogic> {
   private async run(prev: SnapshotFrom<TLogic>, event: unknown): Promise<SnapshotFrom<TLogic>> {
     if (event === RESET) {
       if (!this.execution.stopped) {
+        // A remount `send` already replaced the stopped execution during commit.
         return prev
       }
       this.execution = this.createExecution()
       await this.execution.start()
       return this.execution.initial
+    }
+    if (event === FAIL) {
+      await this.execution.start()
+      return prev
+    }
+    if (this.execution.stopped) {
+      // Remount `send` arrived before the RESET from `connect`: start over, then apply.
+      this.execution = this.createExecution()
+      return this.execution.transition(this.execution.initial, event)
     }
     return this.execution.transition(prev, event)
   }
