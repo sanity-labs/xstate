@@ -63,6 +63,7 @@
     "playwright": "catalog:",
     "publint": "^0.3.25",
     "react": "^19.3.1",
+    "react-concurrent-store": "catalog:",
     "react-dom": "^19.3.1",
     "rxjs": "catalog:",
     "tsdown": "^0.23.7",

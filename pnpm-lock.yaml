@@ -196,6 +196,9 @@ catalogs:
     playwright:
       specifier: ^1.65.1
       version: 1.65.1
+    react-concurrent-store:
+      specifier: 0.0.1
+      version: 0.0.1
     rxjs:
       specifier: ^7.8.2
       version: 7.8.2
@@ -358,6 +361,9 @@ importers:
       react:
         specifier: ^19.3.1
         version: 19.3.1
+      react-concurrent-store:
+        specifier: 'catalog:'
+        version: 0.0.1(react@19.3.1)
       react-dom:
         specifier: ^19.3.1
         version: 19.3.1(react@19.3.1)
@@ -2565,6 +2571,11 @@ packages:
 
   quansync@1.0.0:
     resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
+
+  react-concurrent-store@0.0.1:
+    resolution: {integrity: sha512-IQ86CO4tECINVxlkhxvLoliR3EI98Nz0R4v4cSJC09ZIojs7fXAlrkDJnQKF8Q9t4JWoc997gW8QEGUgzB6mLg==}
+    peerDependencies:
+      react: ^19.0.0
 
   react-dom@19.3.1:
     resolution: {integrity: sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==}
@@ -4792,6 +4803,10 @@ snapshots:
   punycode@2.3.1: {}
 
   quansync@1.0.0: {}
+
+  react-concurrent-store@0.0.1(react@19.3.1):
+    dependencies:
+      react: 19.3.1
 
   react-dom@19.3.1(react@19.3.1):
     dependencies:
