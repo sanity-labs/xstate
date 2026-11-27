@@ -7,40 +7,28 @@ import {
   subscribeToMockActivity,
   type ApiPath,
   type Latency,
+  type MockActivity,
   type MockRequest,
 } from '@/mocks/latency'
 import {useRouter} from '@/router/index'
 
 import './debugger.css'
-import {networkMachine} from './machine'
+import {addRequest, networkMachine, removeRequest, type Requests} from './machine'
 
 const LABELS: Record<ApiPath, string> = {
   '/api/lessons': 'GET /api/lessons',
   '/api/lesson/:id/toggle': 'POST /api/lesson/:id/toggle',
 }
 
-type Requests = Record<ApiPath, readonly MockRequest[]>
-
-type RequestAction =
-  | {type: 'start'; request: MockRequest}
-  | {type: 'end'; path: ApiPath; id: string}
-
-const noRequests: Requests = {'/api/lessons': [], '/api/lesson/:id/toggle': []}
-
-function reduceRequests(requests: Requests, action: RequestAction): Requests {
-  switch (action.type) {
-    case 'start': {
-      const {path} = action.request
-      return {...requests, [path]: [...requests[path], action.request]}
-    }
-    case 'end':
-      return {
-        ...requests,
-        [action.path]: requests[action.path].filter((request) => request.id !== action.id),
-      }
+function reduceRequests(requests: Requests, activity: MockActivity): Requests {
+  switch (activity.type) {
+    case 'request.start':
+      return addRequest(requests, activity.request)
+    case 'request.end':
+      return removeRequest(requests, activity.path, activity.id)
     default: {
-      const unhandled: never = action
-      throw new Error(`Unhandled request action: ${JSON.stringify(unhandled)}`)
+      const unhandled: never = activity
+      throw new Error(`Unhandled mock activity: ${JSON.stringify(unhandled)}`)
     }
   }
 }
@@ -137,48 +125,22 @@ function NetworkRow({
 export function NetworkDebugger() {
   const [latency] = useState(readLatencies)
   const [snapshot, send] = useActor(networkMachine, {input: {latency}})
-  const [requests, updateRequests] = useOptimistic(noRequests, reduceRequests)
+  const [requests, updateRequests] = useOptimistic(snapshot.context.requests, reduceRequests)
   const {path} = useRouter().location
 
-  // The mock server reports requests from outside React. Each request is shown optimistically by
-  // an action that lasts as long as the request, so it shows as it starts, even while a
-  // transition waiting for it is suspended.
-  useEffect(() => {
-    const ends = new Map<string, () => void>()
-    const unsubscribe = subscribeToMockActivity((activity) => {
-      switch (activity.type) {
-        case 'request.start': {
-          const {request} = activity
-          const ended = new Promise<void>((resolve) => ends.set(request.id, resolve))
-          startTransition(async () => {
-            updateRequests({type: 'start', request})
-            send(activity)
-            await ended
-          })
-          break
-        }
-        case 'request.end': {
-          ends.get(activity.id)?.()
-          ends.delete(activity.id)
-          // An action that outlives this request, entangled with it, would keep showing it.
-          startTransition(() => {
-            updateRequests({type: 'end', path: activity.path, id: activity.id})
-          })
-          break
-        }
-        default: {
-          const unhandled: never = activity
-          throw new Error(`Unhandled mock activity: ${JSON.stringify(unhandled)}`)
-        }
-      }
-    })
-    return () => {
-      unsubscribe()
-      for (const end of ends.values()) {
-        end()
-      }
-    }
-  }, [send, updateRequests])
+  // The mock server reports requests from outside React. The machine renders each report in a
+  // transition, which waits while an async action of the app is pending, so the report is also
+  // shown optimistically, at once, until the machine's snapshot with it renders.
+  useEffect(
+    () =>
+      subscribeToMockActivity((activity) => {
+        startTransition(() => {
+          updateRequests(activity)
+          send(activity)
+        })
+      }),
+    [send, updateRequests],
+  )
 
   const paths: readonly ApiPath[] = path === '/login' ? ['/api/lessons'] : API_PATHS
   return (

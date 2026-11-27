@@ -64,9 +64,10 @@ function Home() {
 The login form is a tiny machine of its own, and `LoginForm` keeps its fields with `useOptimistic`
 the same way.
 
-**Some state should not wait.** The network debugger shows each request as it starts, even while
-the transition waiting on it is suspended. Each request is added with `useOptimistic` by an action
-that lasts as long as the request, while the latency settings live in a machine.
+**Some state should not wait.** The network debugger shows each request as it starts. Its machine
+renders reports from the mock server in transitions, which wait while an async action of the app,
+like completing a lesson, is pending. So the debugger also adds each report with `useOptimistic`
+in a synchronous action, which shows it at once without holding the app's transitions open.
 
 **Transition types pick the animation.** Back and forward send the router event inside a transition
 tagged `navigation-back` or `navigation-forward`, and the page's `<ViewTransition>` slides in that
