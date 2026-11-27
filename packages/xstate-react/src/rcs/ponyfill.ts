@@ -4,7 +4,7 @@
 // refreshes it inside its own useTransition. The ponyfill has no re-check after subscribe and
 // initializes from a value that lags until a listener runs, so retain() notifies when this
 // render's snapshot is behind the actor.
-import {useEffect} from 'react'
+import {useEffect, useState} from 'react'
 import {createStore, useStore, type ReactStore} from 'react-concurrent-store'
 import type {Actor, AnyActorLogic, SnapshotFrom} from 'xstate'
 
@@ -54,20 +54,49 @@ function retain<TLogic extends AnyActorLogic>(actor: Actor<TLogic>): () => void 
   }
 }
 
+interface Bound<TLogic extends AnyActorLogic> {
+  readonly actor: Actor<TLogic>
+  /** Snapshot to reveal until useStore's cache leaves `staleCache`. */
+  readonly snapshot: SnapshotFrom<TLogic>
+  /** useStore value observed when `actor` last changed; null once the cache has moved on. */
+  readonly staleCache: SnapshotFrom<TLogic> | null
+}
+
 export function useActorSnapshot<TLogic extends AnyActorLogic>(
   actor: Actor<TLogic>,
 ): SnapshotFrom<TLogic> {
   const bridge = getBridge(actor)
-  const snapshot = useStore(bridge.rcs)
+  const storeSnapshot = useStore(bridge.rcs)
+
+  // useStore caches the first store's value and only refreshes on notifications. A replacement
+  // actor builds a new store that already holds getSnapshot(), so retain() does not notify, and
+  // the cache would keep the previous actor's snapshot — same case main adjusts during render.
+  const [bound, setBound] = useState<Bound<TLogic>>(() => ({
+    actor,
+    snapshot: storeSnapshot,
+    staleCache: null,
+  }))
+  if (bound.actor !== actor) {
+    setBound({actor, snapshot: bridge.last, staleCache: storeSnapshot})
+  } else if (bound.staleCache !== null && storeSnapshot !== bound.staleCache) {
+    setBound({actor, snapshot: storeSnapshot, staleCache: null})
+  }
+
+  const snapshot =
+    bound.actor !== actor || (bound.staleCache !== null && storeSnapshot === bound.staleCache)
+      ? bound.actor !== actor
+        ? bridge.last
+        : bound.snapshot
+      : storeSnapshot
 
   useEffect(() => retain(actor), [actor])
   useEffect(() => {
     // This render saw an older snapshot than the actor. The ponyfill does not re-check after
     // subscribe, so ask it to deliver the newest one.
-    if (snapshot !== bridge.last) {
+    if (storeSnapshot !== bridge.last) {
       bridge.rcs.update(bridge.last)
     }
-  }, [bridge, snapshot])
+  }, [bridge, storeSnapshot])
 
   const value: unknown = snapshot
   if (isErrored(value)) {

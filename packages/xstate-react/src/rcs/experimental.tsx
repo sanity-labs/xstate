@@ -5,7 +5,7 @@
 // The reducer keeps the committed snapshot when there is no event to replay. useActor has no sync
 // send, so an update that arrives outside a transition cannot be rebased onto a pending one: the
 // ponyfill reveals the head or keeps the committed snapshot according to its own priority check.
-import {useEffect} from 'react'
+import {useEffect, useState} from 'react'
 import {experimental} from 'react-concurrent-store'
 import type {Actor, AnyActorLogic, SnapshotFrom} from 'xstate'
 
@@ -13,66 +13,70 @@ import {isErrored} from '../useActorSnapshot.main'
 
 const {createStoreFromSource, useStoreSelector} = experimental
 
-type Source<TLogic extends AnyActorLogic> = ReturnType<
-  typeof createStoreFromSource<SnapshotFrom<TLogic>, null>
->
-
-interface Bridge<TLogic extends AnyActorLogic> {
-  xs: Source<TLogic>
-  refs: number
-  unsubscribe: (() => void) | undefined
+type Source<TLogic extends AnyActorLogic> = {
+  getState: () => SnapshotFrom<TLogic>
+  reducer: (snapshot: SnapshotFrom<TLogic>) => SnapshotFrom<TLogic>
 }
 
-const bridges = new WeakMap<Actor<any>, Bridge<any>>()
+/** Current actor for a hook's stable store source; avoids a render-time ref read in getState. */
+const actors = new WeakMap<Source<any>, Actor<any>>()
 
 function identity<T>(value: T): T {
   return value
 }
 
-function getBridge<TLogic extends AnyActorLogic>(actor: Actor<TLogic>): Bridge<TLogic> {
-  let bridge = bridges.get(actor) as Bridge<TLogic> | undefined
-  if (!bridge) {
-    bridge = {
-      xs: createStoreFromSource<SnapshotFrom<TLogic>, null>({
-        getState: () => actor.getSnapshot(),
-        reducer: (snapshot) => snapshot,
-      }),
-      refs: 0,
-      unsubscribe: undefined,
-    }
-    bridges.set(actor, bridge)
-  }
-  return bridge
-}
-
-function retain<TLogic extends AnyActorLogic>(actor: Actor<TLogic>): () => void {
-  const bridge = getBridge(actor)
-  if (bridge.refs++ === 0) {
-    const push = () => bridge.xs.handleUpdate(null)
-    const subscription = actor.subscribe({
-      next: push,
-      error: push,
-    })
-    bridge.unsubscribe = () => subscription.unsubscribe()
-    if (bridge.xs.getState() !== actor.getSnapshot()) {
-      push()
-    }
-  }
-  return () => {
-    if (--bridge.refs === 0) {
-      bridge.unsubscribe?.()
-      bridge.unsubscribe = undefined
-    }
-  }
+interface Bound<TLogic extends AnyActorLogic> {
+  readonly actor: Actor<TLogic>
+  /** Snapshot to reveal until useStoreSelector's cache leaves `staleCache`. */
+  readonly snapshot: SnapshotFrom<TLogic>
+  /** Selector value observed when `actor` last changed; null once the cache has moved on. */
+  readonly staleCache: SnapshotFrom<TLogic> | null
 }
 
 export function useActorSnapshot<TLogic extends AnyActorLogic>(
   actor: Actor<TLogic>,
 ): SnapshotFrom<TLogic> {
-  const bridge = getBridge(actor)
-  const snapshot = useStoreSelector(bridge.xs, identity)
+  // useStoreSelector rejects changing store identities, so one store per hook reads the current
+  // actor through a stable source — same replacement case main adjusts during render.
+  const [source] = useState(() => {
+    const source: Source<TLogic> = {
+      getState: () => actors.get(source)!.getSnapshot(),
+      reducer: (snapshot) => snapshot,
+    }
+    return source
+  })
+  actors.set(source, actor)
+  const [store] = useState(() => createStoreFromSource<SnapshotFrom<TLogic>, null>(source))
+  const storeSnapshot = useStoreSelector(store, identity)
 
-  useEffect(() => retain(actor), [actor])
+  const [bound, setBound] = useState<Bound<TLogic>>(() => ({
+    actor,
+    snapshot: storeSnapshot,
+    staleCache: null,
+  }))
+  if (bound.actor !== actor) {
+    setBound({actor, snapshot: actor.getSnapshot(), staleCache: storeSnapshot})
+  } else if (bound.staleCache !== null && storeSnapshot !== bound.staleCache) {
+    setBound({actor, snapshot: storeSnapshot, staleCache: null})
+  }
+
+  const snapshot =
+    bound.actor !== actor || (bound.staleCache !== null && storeSnapshot === bound.staleCache)
+      ? bound.actor !== actor
+        ? actor.getSnapshot()
+        : bound.snapshot
+      : storeSnapshot
+
+  useEffect(() => {
+    actors.set(source, actor)
+    const push = () => store.handleUpdate(null)
+    const subscription = actor.subscribe({
+      next: push,
+      error: push,
+    })
+    push()
+    return () => subscription.unsubscribe()
+  }, [actor, source, store])
 
   const value: unknown = snapshot
   if (isErrored(value)) {
