@@ -18,7 +18,8 @@ export function useSend<TActor extends AnyActorRef>(actor: TActor): TActor['send
  * Returns a `send` for updates that must show right away, like a controlled input's `onChange`.
  * The event's outcome is computed with XState's `transition()` and shown with `useOptimistic` by
  * every hook that holds the actor's snapshot, while the actor's own snapshot renders in a
- * transition. Previews never run effects, so a child actor in a preview may not be running yet.
+ * transition. Previews never run effects: a child actor in a preview is a copy that never starts and
+ * ignores events, until the transition renders the snapshot with the running child.
  *
  * @public
  */
