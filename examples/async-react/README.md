@@ -9,6 +9,11 @@ shows delayed loading states, keeps the current page on screen while the next on
 animates between pages with view transitions. The design components are unchanged apart from taking
 controlled values, so the differences are in the router, the forms and the network debugger.
 
+Try it at [async-react-xstate.sanity.dev](https://async-react-xstate.sanity.dev). It is deployed
+from `main` by a Vercel project with `examples/async-react` as its root directory, and
+[`vercel.json`](./vercel.json) rewrites client routes such as `/login` to `index.html`, so a deep
+link survives a reload.
+
 ## Run it
 
 ```bash
