@@ -4,7 +4,6 @@ packages:
 
 autoDedupe: true
 lockfile:
-  format: v13
   includeResolutionSettings: true
 
 catalogMode: prefer
