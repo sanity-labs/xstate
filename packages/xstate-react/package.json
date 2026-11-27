@@ -1,6 +1,6 @@
 {
   "name": "@sanity-labs/xstate-react",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "React 19 bindings for XState v6, built for transitions and useOptimistic",
   "keywords": [
     "concurrent",
