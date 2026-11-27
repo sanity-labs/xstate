@@ -8,6 +8,7 @@
   "scripts": {
     "build": "pnpm --filter @sanity-labs/xstate-react build",
     "changeset": "changeset",
+    "dev": "pnpm --filter async-react dev",
     "format": "oxfmt && pnpm lint --fix",
     "knip": "knip --no-config-hints",
     "lint": "oxlint",

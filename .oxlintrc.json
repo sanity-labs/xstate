@@ -6,7 +6,12 @@
     "denyWarnings": true,
     "reportUnusedDisableDirectives": "error"
   },
-  "ignorePatterns": ["**/dist", ".agents/skills", ".claude/skills"],
+  "ignorePatterns": [
+    "**/dist",
+    ".agents/skills",
+    ".claude/skills",
+    "examples/async-react/public/mockServiceWorker.js"
+  ],
   "plugins": ["react", "unicorn", "typescript", "oxc", "import", "node"],
   "categories": {
     "correctness": "error",
@@ -38,7 +43,8 @@
     ],
     "eslint/no-shadow": "off",
     "consistent-return": "off",
-    "eslint/no-underscore-dangle": "off"
+    "eslint/no-underscore-dangle": "off",
+    "import/no-unassigned-import": ["warn", {"allow": ["**/*.css"]}]
   },
   "overrides": [
     {

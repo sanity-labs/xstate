@@ -1,0 +1,48 @@
+{
+  "name": "async-react",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "build:no-compiler": "vite build --mode no-compiler",
+    "dev": "vite",
+    "dev:no-compiler": "vite --mode no-compiler",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-label": "^2.1.17",
+    "@radix-ui/react-separator": "^1.2.0",
+    "@radix-ui/react-slot": "^1.5.0",
+    "@radix-ui/react-tabs": "^1.2.1",
+    "@sanity-labs/xstate-react": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "fast-fuzzy": "^1.12.0",
+    "lucide-react": "^1.80.0",
+    "msw": "^3.0.7",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.1",
+    "xstate": "6.0.0-beta.5"
+  },
+  "devDependencies": {
+    "@sanity/tsconfig": "^2.2.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "catalog:",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "oxc-transform-react": "^0.158.0",
+    "tailwindcss": "^4.3.5",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "catalog:",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.2"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  }
+}
