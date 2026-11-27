@@ -17,6 +17,12 @@ const config: KnipConfig = {
     'packages/xstate-react': {
       entry: ['src/index.ts'],
       project: ['src/**/*.{ts,tsx}', '*.ts'],
+      // Research configs and the shims they alias the suites to; see `vitest.prototype.config.ts`.
+      ignore: [
+        'vitest.prototype.config.ts',
+        'vitest.prototype.browser.config.ts',
+        'src/prototypes/shapes/*.ts',
+      ],
     },
   },
 }
