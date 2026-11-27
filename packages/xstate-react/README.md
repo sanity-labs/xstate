@@ -202,7 +202,7 @@ function Search() {
 }
 ```
 
-A preview never runs effects: entry actions, invoked and spawned actors run only in the actor itself, so a child actor in a preview snapshot may not be running yet.
+A preview never runs effects: entry actions, invoked and spawned actors run only in the actor itself. A child actor in a preview snapshot is a copy that never starts and ignores events, until the transition renders the snapshot with the running child. Send to children through their parent rather than through a ref read from a preview.
 
 Components that manage their own optimistic state and call an action prop inside a transition work with plain `send`. Pass it from the action:
 
