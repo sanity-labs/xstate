@@ -2,6 +2,8 @@
 
 React bindings for [XState](https://stately.ai/docs) v6, built on React's async APIs: sending an event is a transition, so machine updates render together with the transition they belong to, and controlled inputs stay in sync through `useOptimistic`.
 
+The snapshot lives in React state instead of an external store read with `useSyncExternalStore`, which would turn every transition that changes the actor into a blocking update. One component subscribes to each actor and passes the snapshot down, so every reader renders the same snapshot in the same commit.
+
 ## Requirements
 
 - `react` and `react-dom` `^19.3`. `addTransitionType` is stable from React 19.3.
@@ -40,11 +42,37 @@ function Counter() {
 
 - `useActor(logic, options)` creates an actor, starts it, and returns `[snapshot, send, actor]`. `useMachine` is a deprecated alias.
 - `useActorRef(logic, options)` creates and starts an actor without subscribing to its snapshot.
-- `useSelector(actor, selector, compare?)` re-renders only when the selected value changes. `shallowEqual` is exported for use as `compare`.
+- `useSelector(actor, selector, compare?)` reads a value derived from the snapshot, and returns the previous value while `compare` says it is unchanged. `shallowEqual` is exported for use as `compare`.
 - `useSend(actor)` returns the same `send` that `useActor` returns, for an actor created with `useActorRef` or received as a prop.
-- `createActorContext(logic, options)` returns `{Provider, useSelector, useSend, useActorRef}` for sharing one actor with a subtree.
+- `useOptimisticSend(actor)` returns a `send` for updates that must show right away, like a controlled input's `onChange`.
+- `createActorContext(logic, options)` returns `{Provider, useSelector, useSend, useOptimisticSend, useActorRef}` for sharing one actor with a subtree.
 
-Use `send` from these hooks rather than `actor.send`: it is the one that takes part in transitions and optimistic updates.
+### Sharing an actor
+
+`createActorContext` is the way to read one actor in many components. Its `Provider` is the only component that subscribes to the actor. It holds the snapshot in state and passes it down through context, so a component that mounts while a transition is changing the actor renders the same snapshot as the rest of the tree.
+
+```tsx
+import {createActorContext} from '@sanity-labs/xstate-react'
+
+const Counter = createActorContext(counterMachine)
+
+function Count() {
+  const count = Counter.useSelector((snapshot) => snapshot.context.count)
+  return <output>{count}</output>
+}
+
+function App() {
+  return (
+    <Counter.Provider>
+      <Count />
+    </Counter.Provider>
+  )
+}
+```
+
+A reader re-renders whenever the snapshot changes, because React has no way to select from a context. `useSelector` returns the previous value while `compare` says it is unchanged, so with the [React Compiler](https://react.dev/learn/react-compiler), or `memo`, what the reader renders bails out. `useSelector(actor, …)` with the provided actor reads from the provider too.
+
+Outside a provider, `useSelector(actor, …)` subscribes to the actor itself and re-renders only when the selection changes. Each such hook is a subscriber of its own, so a component that mounts during a transition can render a newer snapshot than the components that are waiting for that transition. Use a provider when several components read the same actor.
 
 ### The first machine, and `key` to start over
 
@@ -86,7 +114,7 @@ To start over with fresh `input`, or to switch to a different machine, give the 
 
 `send` is a transition. The snapshot change it causes renders in the background, so a part of the tree that suspends on it keeps showing the previous snapshot instead of falling back to a `Suspense` boundary. Read `isPending` from `useTransition` to show that work is in progress.
 
-Called inside `startTransition`, `send` joins that transition, including its `addTransitionType` types, so `<ViewTransition>` can animate the change:
+Called inside `startTransition`, `send` joins that transition, including its `addTransitionType` types, so `<ViewTransition>` can animate the change. Events sent with `actor.send` or `actor.trigger` inside `startTransition` join it too:
 
 ```tsx
 import {useActor} from '@sanity-labs/xstate-react'
@@ -115,7 +143,7 @@ function Slides() {
 }
 ```
 
-As with any state update, a `send` after an `await` in an async transition is no longer part of it. Wrap it in `startTransition` again:
+As with any state update, a `send` after an `await` in an async transition is no longer part of it: it is a transition of its own, without the outer transition's types. Wrap it in `startTransition` again to add types:
 
 ```tsx
 startTransition(async () => {
@@ -128,13 +156,14 @@ startTransition(async () => {
 
 ### Controlled inputs
 
-A controlled input has to show what was typed right away, but a transition renders later. When `send` is called outside a transition, as in an `onChange` handler, the event's outcome is computed with XState's `transition()` and shown with `useOptimistic` until the transition renders. The caret stays where it was:
+A controlled input has to show what was typed right away, but a transition renders later. Send its events with `useOptimisticSend`: the event's outcome is computed with XState's `transition()` and shown with `useOptimistic` until the transition renders, so the input keeps its value and caret. A pending transition that suspends stays hidden, because the preview is computed from the snapshot React has committed:
 
 ```tsx
-import {useActor} from '@sanity-labs/xstate-react'
+import {useActor, useOptimisticSend} from '@sanity-labs/xstate-react'
 
 function Search() {
-  const [snapshot, send] = useActor(searchMachine)
+  const [snapshot, , actor] = useActor(searchMachine)
+  const send = useOptimisticSend(actor)
   return (
     <input
       value={snapshot.context.query}
@@ -144,7 +173,9 @@ function Search() {
 }
 ```
 
-Components that manage their own optimistic state and call an action prop inside a transition work too. Pass `send` from the action:
+A preview never runs effects: entry actions, invoked and spawned actors run only in the actor itself, so a child actor in a preview snapshot may not be running yet.
+
+Components that manage their own optimistic state and call an action prop inside a transition work with plain `send`. Pass it from the action:
 
 ```tsx
 import {createActorContext} from '@sanity-labs/xstate-react'

@@ -28,9 +28,9 @@ function identity<T>(value: T): T {
  * subscribes to its snapshot. Create a passed actor once, e.g.
  * `useState(() => restoreActor(machine, persisted))[0]`.
  *
- * `send` is a transition: snapshot updates it causes render together with the transition it is
- * called in, or in a transition of its own. Until that transition settles, the returned snapshot
- * already shows the event's outcome, so a controlled input can call `send` in `onChange`.
+ * The snapshot is held in React state, and this hook is the only subscriber that puts it there.
+ * `send` sends in a transition: the one it is called in, or a transition of its own. For an update
+ * that must show right away, like a controlled input's `onChange`, use `useOptimisticSend(actor)`.
  *
  * The logic passed on the first render is used for the component's lifetime, and `input` is read
  * once. To start over, or to switch to a different machine, change the component's `key`.

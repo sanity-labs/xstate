@@ -124,17 +124,22 @@ describe('createActorContext', () => {
 
     let rerenders = 0
 
+    // The provider holds the snapshot, so a reader re-renders on every snapshot change. The
+    // comparator keeps the selection's identity, which lets what the reader renders bail out.
+    const Value = React.memo(function Value({value}: {value: {counter: number}}) {
+      rerenders += 1
+      return <div data-testid="value">{value.counter}</div>
+    })
+
     const Component = () => {
       const actor = SomeContext.useActorRef()
       const value = SomeContext.useSelector((state) => state.context.obj, shallowEqual)
-
-      rerenders += 1
 
       return (
         <>
           <button onClick={() => actor.send({type: 'INC'})}>Inc</button>
           <button onClick={() => actor.send({type: 'PUSH'})}>Push</button>
-          <div data-testid="value">{value.counter}</div>;
+          <Value value={value} />
         </>
       )
     }
