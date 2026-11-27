@@ -17,6 +17,7 @@ const config: KnipConfig = {
     'packages/xstate-react': {
       entry: ['src/index.ts'],
       project: ['src/**/*.{ts,tsx}', '*.ts'],
+      ignore: ['vitest.prototype.config.ts'],
     },
   },
 }
