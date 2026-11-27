@@ -172,7 +172,7 @@ function Slides() {
 }
 ```
 
-As with any state update, a `send` after an `await` in an async transition is no longer part of it: it is a transition of its own, without the outer transition's types. Wrap it in `startTransition` again to add types:
+As with any state update, a `send` after an `await` in an async transition is no longer part of it: it is a transition of its own. Types added before the `await` aren't tied to it either: React applies them to the next transition that commits. Wrap the `send` in `startTransition` again, and add the types it needs there:
 
 ```tsx
 startTransition(async () => {
@@ -230,7 +230,7 @@ const [snapshot] = useActor(toastMachine, {updates: 'sync'})
 
 The toast then hides right away. The snapshot it renders includes the suspended transition's changes too, so a `Suspense` boundary waiting on them shows its fallback.
 
-`send` is a transition either way. After an `await` in an async transition, wrap `send` in `startTransition` again to keep the transition's types.
+`send` is a transition either way. After an `await` in an async transition, wrap `send` in `startTransition` again to add transition types to it.
 
 ## License
 

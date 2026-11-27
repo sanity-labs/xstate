@@ -10,6 +10,8 @@ catalogMode: prefer
 
 catalog:
   '@types/node': ^26.6.11
+  '@vitest/browser-playwright': ^5.1.2
+  playwright: ^1.65.1
   rxjs: ^7.8.2
   typescript: 7.0.2
   zod: ^3.25.76

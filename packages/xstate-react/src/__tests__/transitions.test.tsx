@@ -53,6 +53,8 @@ function setup(gate: Promise<void>, updates?: Updates) {
   }
 }
 
+const viewTransitionTypes = recordViewTransitionTypes()
+
 describe('xstate 6.0.0-beta.5', () => {
   it('notifies subscribers before `actor.send()` returns', () => {
     const actor = createActor(counterMachine).start()
@@ -64,8 +66,6 @@ describe('xstate 6.0.0-beta.5', () => {
 })
 
 describe('send', () => {
-  const types = recordViewTransitionTypes()
-
   it('joins the transition it is called in, keeping the content while the next state suspends', async () => {
     const gate = deferred()
     const {send} = setup(gate.promise)
@@ -81,7 +81,7 @@ describe('send', () => {
 
     await act(async () => gate.resolve())
     expect(screen.getByTestId('count').textContent).toBe('1')
-    expect(types).toContainEqual(['increment'])
+    expect(viewTransitionTypes).toContainEqual(['increment'])
   })
 
   it('keeps the outer transition types when it starts a transition of its own', async () => {
@@ -96,7 +96,7 @@ describe('send', () => {
       })
     })
     expect(screen.getByTestId('count').textContent).toBe('1')
-    expect(types).toEqual([['outer']])
+    expect(viewTransitionTypes).toEqual([['outer']])
   })
 
   it('is a transition of its own when called outside one', async () => {
@@ -140,7 +140,7 @@ describe('send', () => {
     await act(async () => gate.resolve())
     expect(screen.getByTestId('count').textContent).toBe('1')
     expect(isPending()).toBe(false)
-    expect(types).toContainEqual(['after-await'])
+    expect(viewTransitionTypes).toContainEqual(['after-await'])
   })
 
   it('is still a transition after `await` without `startTransition`', async () => {

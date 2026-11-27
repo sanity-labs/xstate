@@ -13,6 +13,7 @@
     "lint": "oxlint",
     "release": "changeset publish",
     "test": "pnpm --filter @sanity-labs/xstate-react test",
+    "test:browser": "pnpm --filter @sanity-labs/xstate-react test:browser",
     "watch": "pnpm --filter @sanity-labs/xstate-react watch"
   },
   "devDependencies": {

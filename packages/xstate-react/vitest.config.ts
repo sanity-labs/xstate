@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     setupFiles: ['vitest-cleanup-after-each.ts'],
     environment: 'jsdom',
-    exclude: ['**/dist/**', '**/node_modules/**'],
+    exclude: ['**/dist/**', '**/node_modules/**', 'src/__tests__/browser/**'],
     typecheck: {
       ignoreSourceErrors: true,
     },

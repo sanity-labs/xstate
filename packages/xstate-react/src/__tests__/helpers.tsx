@@ -37,33 +37,36 @@ export function deferred<T = void>(): {
 
 /**
  * Installs a `document.startViewTransition` that runs the update at once and records the transition
- * types React passes to it, which are the types of the transition that committed.
+ * types React passes to it, which are the types of the transition that committed. What the
+ * environment lacks for React to start a view transition is stubbed too.
  */
 export function recordViewTransitionTypes(): string[][] {
   const recorded: string[][] = []
-  const doc = document as any
-  const root = document.documentElement as any
+  const stubs: [object, string, unknown][] = [
+    [document, 'startViewTransition', startViewTransition],
+    [document, 'fonts', {status: 'loaded', ready: Promise.resolve()}],
+    [document.documentElement, 'getAnimations', () => []],
+    [Element.prototype, 'animate', () => ({finished: Promise.resolve(), cancel() {}})],
+  ]
+  const installed: [object, string][] = []
+  function startViewTransition({update, types}: {update: () => unknown; types?: string[]}) {
+    recorded.push([...(types ?? [])])
+    const done = Promise.resolve().then(update)
+    return {ready: done, finished: done, updateCallbackDone: done, skipTransition() {}}
+  }
   beforeEach(() => {
-    doc.fonts = {status: 'loaded', ready: Promise.resolve()}
-    root.getAnimations = () => []
-    ;(Element.prototype as any).animate = () => ({finished: Promise.resolve(), cancel() {}})
-    doc.startViewTransition = ({update, types}: {update: () => unknown; types?: string[]}) => {
-      recorded.push([...(types ?? [])])
-      const done = Promise.resolve().then(update)
-      return {
-        ready: done,
-        finished: done,
-        updateCallbackDone: done,
-        skipTransition() {},
+    for (const [target, key, value] of stubs) {
+      if (key === 'startViewTransition' || !(key in target)) {
+        Object.defineProperty(target, key, {value, configurable: true, writable: true})
+        installed.push([target, key])
       }
     }
   })
   afterEach(() => {
     recorded.length = 0
-    delete doc.startViewTransition
-    delete doc.fonts
-    delete root.getAnimations
-    delete (Element.prototype as any).animate
+    for (const [target, key] of installed.splice(0)) {
+      delete (target as Record<string, unknown>)[key]
+    }
   })
   return recorded
 }
