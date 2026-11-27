@@ -89,7 +89,7 @@ function Checkout({onPaid}: {onPaid: () => void}) {
 }
 ```
 
-Props the machine should react to after mounting are events. Send them from an effect:
+Props the machine should react to after mounting are events. Send them from an effect. `send` wraps the event in `startTransition`, so the change renders as a transition, like one from an event handler:
 
 ```tsx
 import {useActor} from '@sanity-labs/xstate-react'
@@ -109,6 +109,35 @@ To start over with fresh `input`, or to switch to a different machine, give the 
 ```tsx
 <Stepper key={documentId} start={1} limit={10} />
 ```
+
+The same goes for switching machines:
+
+```tsx
+<Editor key={mode} machine={mode === 'draft' ? draftMachine : reviewMachine} />
+```
+
+### Restoring an actor
+
+The hooks also take an actor that is already created, for example one restored from a persisted snapshot. Create it once, in a `useState` initializer, so it isn't recreated on every render:
+
+```tsx
+import {useActor} from '@sanity-labs/xstate-react'
+import {useState} from 'react'
+import type {SnapshotFrom} from 'xstate'
+import {restoreActor} from 'xstate/persist'
+
+function Editor({persisted}: {persisted: SnapshotFrom<typeof editorMachine>}) {
+  const [actor] = useState(() => restoreActor(editorMachine, persisted))
+  const [snapshot, send] = useActor(actor)
+  // ...
+}
+```
+
+### Starting and stopping
+
+The actor starts when the component mounts and stops when it unmounts. Stopping waits a microtask, so the unmount and remount that `StrictMode` simulates keep the running actor. v6 actors can't be restarted once stopped, so when a stopped actor's component is shown again, the hooks create a fresh actor from the same machine.
+
+`<Activity mode="hidden">` cleans up effects, so an actor that a hidden component owns stops, and the component starts over with a fresh actor when it's shown again. To keep an actor running while part of the tree is hidden, own it above the `Activity` boundary, for example with a `createActorContext` provider.
 
 ### Transitions
 
