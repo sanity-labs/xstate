@@ -1,22 +1,12 @@
-import * as React from 'react'
 import {startTransition} from 'react'
 import {transition, type AnyActorLogic, type AnyActorRef} from 'xstate'
 
-// React has no public way to ask whether code runs inside `startTransition`. Its client internals
-// hold the current transition in `T`.
-const internals: {T: unknown} | undefined = (React as any)
-  .__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE
-
-function isInTransition(): boolean {
-  return internals?.T != null
-}
-
 /**
- * How snapshot changes that `send` did not cause, such as delayed transitions and invoked actors
- * settling, reach React.
+ * How snapshot changes reach React when nothing wraps them in a transition, such as delayed
+ * transitions, invoked actors settling, and events sent with `actor.send` outside `startTransition`.
  *
  * - `'transition'` (default): as transition updates.
- * - `'sync'`: as regular updates, with the priority of whatever triggered them.
+ * - `'sync'`: as regular updates, with the priority of whatever caused them.
  *
  * @public
  */
@@ -25,8 +15,8 @@ export type Updates = 'transition' | 'sync'
 /** @public */
 export interface BindingOptions {
   /**
-   * How snapshot changes that `send` did not cause, such as delayed transitions and invoked
-   * actors settling, reach React. Defaults to `'transition'`.
+   * How snapshot changes reach React when nothing wraps them in a transition, such as delayed
+   * transitions and invoked actors settling. Defaults to `'transition'`.
    */
   updates?: Updates
 }
@@ -35,9 +25,9 @@ type ReadableActor = Pick<AnyActorRef, 'subscribe' | 'getSnapshot'>
 
 export interface Entry {
   readonly snapshot: unknown
-  /** The number of events sent through the store that the snapshot already includes. */
+  /** The number of optimistic events the snapshot already includes. */
   readonly seq: number
-  /** Increases with every snapshot the actor emits, to order entries that share a `seq`. */
+  /** Increases with every snapshot the actor emits. */
   readonly version: number
 }
 
@@ -50,81 +40,68 @@ export interface OptimisticAction {
 }
 
 export interface Listener {
-  /** Returns whether the listener scheduled a render for the entry. */
-  update(entry: Entry, sentInTransition: boolean): boolean
+  update(entry: Entry): void
   optimistic(action: Omit<OptimisticAction, 'fallback'>): void
 }
 
+/**
+ * Reads an actor for the hooks that hold its snapshot in React state, through a single
+ * subscription to the actor however many of those hooks there are.
+ */
 export class ActorStore {
   readonly actor: ReadableActor
   updates: Updates = 'transition'
-  head: Entry
-  /** The newest entry React has committed, which a component mounting outside a transition sees. */
-  committed: Entry
+  private head: Entry
   private seq = 0
   private version = 0
-  private sending = 0
   private readonly listeners = new Set<Listener>()
-  private readonly lagging = new Set<() => void>()
   private unsubscribeActor: (() => void) | undefined
 
   constructor(actor: ReadableActor) {
     this.actor = actor
     this.head = {snapshot: actor.getSnapshot(), seq: 0, version: 0}
-    this.committed = this.head
+  }
+
+  /** The newest entry, for initializing React state and for checks outside render. */
+  read(): Entry {
+    if (!this.unsubscribeActor) {
+      this.pull(false)
+    }
+    return this.head
   }
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener)
     if (!this.unsubscribeActor) {
       const subscription = this.actor.subscribe({
-        next: () => this.pull(),
-        error: () => this.pull(),
+        next: () => this.pull(true),
+        error: () => this.pull(true),
       })
       this.unsubscribeActor = () => subscription.unsubscribe()
-      this.pull()
+      this.pull(true)
     }
     return () => {
       this.listeners.delete(listener)
       if (this.listeners.size === 0) {
         this.unsubscribeActor?.()
         this.unsubscribeActor = undefined
-        this.committed = this.head
       }
     }
   }
 
-  commit(entry: Entry): void {
-    if (entry.version > this.committed.version) {
-      this.committed = entry
-    }
+  /** Sends `event` in a transition: the caller's, or a transition of its own. */
+  send = (event: unknown): void => {
+    startTransition(() => {
+      ;(this.actor as AnyActorRef).send(event)
+    })
   }
 
   /**
-   * Registers a reader that mounted showing `committed` while others were rendering a newer
-   * snapshot in a transition, to catch up when they commit it. Returns a function that unregisters.
+   * Sends `event` in a transition, and shows its outcome right away with `useOptimistic` until that
+   * transition settles.
    */
-  lag(catchUp: () => void): () => void {
-    this.lagging.add(catchUp)
-    return () => this.lagging.delete(catchUp)
-  }
-
-  /** Called in the layout phase of a commit that included readers of the actor. */
-  catchUp(): void {
-    for (const catchUp of this.lagging) {
-      catchUp()
-    }
-  }
-
-  send = (event: unknown): void => {
+  sendOptimistic = (event: unknown): void => {
     const seq = ++this.seq
-    if (isInTransition()) {
-      this.deliver(event)
-      return
-    }
-    // An urgent send, like one from a controlled input's `onChange`: the outcome is previewed with
-    // `useOptimistic`, rebased on what is committed, while the snapshot itself updates in a
-    // transition.
     startTransition(() => {
       const logic = (this.actor as {logic?: AnyActorLogic}).logic
       if (logic) {
@@ -132,37 +109,20 @@ export class ActorStore {
           listener.optimistic({logic, event, seq})
         }
       }
-      this.deliver(event)
+      ;(this.actor as AnyActorRef).send(event)
     })
   }
 
-  private deliver(event: unknown): void {
-    this.sending++
-    try {
-      ;(this.actor as AnyActorRef).send(event)
-    } finally {
-      this.sending--
-    }
-  }
-
-  private pull(): void {
+  private pull(notify: boolean): void {
     const snapshot = this.actor.getSnapshot()
     if (snapshot === this.head.snapshot) {
       return
     }
     this.head = {snapshot, seq: this.seq, version: ++this.version}
-    if (this.listeners.size === 0) {
-      this.committed = this.head
-      return
-    }
-    const sentInTransition = this.sending > 0
-    let scheduled = false
-    for (const listener of this.listeners) {
-      scheduled = listener.update(this.head, sentInTransition) || scheduled
-    }
-    // No reader renders anything different, so React already shows this snapshot.
-    if (!scheduled) {
-      this.committed = this.head
+    if (notify) {
+      for (const listener of this.listeners) {
+        listener.update(this.head)
+      }
     }
   }
 }

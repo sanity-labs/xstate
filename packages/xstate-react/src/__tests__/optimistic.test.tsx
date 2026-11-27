@@ -4,11 +4,12 @@ import {startTransition, Suspense, use, useLayoutEffect} from 'react'
 import {afterEach, beforeEach, describe, expect, it} from 'vitest'
 import {createMachine, types} from 'xstate'
 
-import {useActor} from '../index'
+import {useActor, useOptimisticSend} from '../index'
 import {counterMachine, deferred, textMachine} from './helpers'
 
 function Field() {
-  const [snapshot, send] = useActor(textMachine)
+  const [snapshot, , actor] = useActor(textMachine)
+  const send = useOptimisticSend(actor)
   return (
     <input
       aria-label="text"
@@ -48,15 +49,18 @@ describe('a controlled input', () => {
 describe('optimistic previews', () => {
   it('apply an event once when a newer snapshot commits while the preview is pending', async () => {
     let app!: ReturnType<typeof useActor<typeof counterMachine>>
+    let send!: ReturnType<typeof useOptimisticSend<(typeof app)[2]>>
     function Counter() {
       const result = useActor(counterMachine, {updates: 'sync'})
+      const sendOptimistic = useOptimisticSend(result[2])
       useLayoutEffect(() => {
         app = result
+        send = sendOptimistic
       })
       return <p data-testid="count">{result[0].context.count}</p>
     }
     render(<Counter />)
-    const [, send, actor] = app
+    const actor = app[2]
 
     const hold = deferred()
     let action!: Promise<void>
@@ -64,8 +68,6 @@ describe('optimistic previews', () => {
       startTransition(() => {
         action = (async () => {
           await Promise.resolve()
-          // Outside the transition scope after `await`: an urgent send, previewed until the
-          // async action settles.
           send({type: 'inc'})
           await hold.promise
         })()
@@ -106,10 +108,13 @@ describe('optimistic previews', () => {
       return <p data-testid="query">{query}</p>
     }
     let send!: ReturnType<typeof useActor<typeof formMachine>>[1]
+    let sendOptimistic!: typeof send
     function Form() {
-      const [snapshot, _send] = useActor(formMachine)
+      const [snapshot, _send, actor] = useActor(formMachine)
+      const _sendOptimistic = useOptimisticSend(actor)
       useLayoutEffect(() => {
         send = _send
+        sendOptimistic = _sendOptimistic
       })
       return (
         <>
@@ -123,7 +128,7 @@ describe('optimistic previews', () => {
     render(<Form />)
 
     await act(async () => startTransition(() => send({type: 'search', query: 'xstate'})))
-    await act(async () => send({type: 'type', draft: 'x'}))
+    await act(async () => sendOptimistic({type: 'type', draft: 'x'}))
 
     // The urgent render shows the draft without the pending search, so nothing suspends.
     expect(screen.getByTestId('draft').textContent).toBe('x')

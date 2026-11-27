@@ -99,19 +99,20 @@ describe('send', () => {
     expect(types).toEqual([['outer']])
   })
 
-  it('previews an urgent send while the snapshot itself updates in a transition', async () => {
+  it('is a transition of its own when called outside one', async () => {
     const gate = deferred()
-    const {send} = setup(gate.promise)
+    const {send, isPending} = setup(gate.promise)
 
     await act(async () => send({type: 'inc'}))
-    // The urgent preview suspends like any urgent update would.
-    expect(screen.getByTestId('fallback')).toBeTruthy()
+    expect(screen.getByTestId('count').textContent).toBe('0')
+    expect(screen.queryByTestId('fallback')).toBeNull()
+    expect(isPending()).toBe(false)
 
     await act(async () => gate.resolve())
     expect(screen.getByTestId('count').textContent).toBe('1')
   })
 
-  it('needs `startTransition` again after `await`, like any update in an async action', async () => {
+  it('needs `startTransition` again after `await` to carry transition types', async () => {
     const gate = deferred()
     const {send, isPending} = setup(gate.promise)
     const loaded = deferred()
@@ -142,7 +143,7 @@ describe('send', () => {
     expect(types).toContainEqual(['after-await'])
   })
 
-  it('is urgent after `await` without `startTransition`, like `setState`', async () => {
+  it('is still a transition after `await` without `startTransition`', async () => {
     const gate = deferred()
     const {send} = setup(gate.promise)
 
@@ -157,7 +158,8 @@ describe('send', () => {
       })
       await action
     })
-    expect(screen.getByTestId('fallback')).toBeTruthy()
+    expect(screen.getByTestId('count').textContent).toBe('0')
+    expect(screen.queryByTestId('fallback')).toBeNull()
 
     await act(async () => gate.resolve())
     expect(screen.getByTestId('count').textContent).toBe('1')

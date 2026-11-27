@@ -1,8 +1,8 @@
 import {act, render, screen} from '@testing-library/react'
-import {startTransition, Suspense, use, useLayoutEffect, useState} from 'react'
+import {Activity, startTransition, Suspense, use, useLayoutEffect, useState} from 'react'
 import {describe, expect, it} from 'vitest'
 
-import {createActorContext} from '../index'
+import {createActorContext, useSelector} from '../index'
 import {counterMachine, deferred} from './helpers'
 
 const Counter = createActorContext(counterMachine)
@@ -103,5 +103,49 @@ describe('a component mounting while a transition is changing the actor', () => 
     )
     expect(screen.getByTestId('early').textContent).toBe('1')
     expect(screen.getByTestId('late').textContent).toBe('1')
+  })
+})
+
+const replaced = {} as {
+  setKept: (kept: string) => void
+  actor: ReturnType<typeof Counter.useActorRef>
+}
+
+function KeptChild() {
+  const [kept, setKept] = useState('')
+  const count = Counter.useSelector((snapshot) => snapshot.context.count)
+  const actor = Counter.useActorRef()
+  const selected = useSelector(actor, (snapshot) => snapshot.context.count)
+  useLayoutEffect(() => {
+    replaced.setKept = setKept
+    replaced.actor = actor
+  }, [actor])
+  return <span data-testid="child">{`${kept}${count}${selected}`}</span>
+}
+
+function ActivityApp({mode}: {mode: 'visible' | 'hidden'}) {
+  return (
+    <Activity mode={mode}>
+      <Counter.Provider>
+        <KeptChild />
+      </Counter.Provider>
+    </Activity>
+  )
+}
+
+describe('a provider whose stopped actor is replaced', () => {
+  it('keeps the state of its subtree, and its readers read the new actor', async () => {
+    const {rerender} = render(<ActivityApp mode="visible" />)
+    const first = replaced.actor
+    await act(async () => {
+      replaced.setKept('kept')
+      first.send({type: 'inc'})
+    })
+    expect(screen.getByTestId('child').textContent).toBe('kept11')
+
+    await act(async () => rerender(<ActivityApp mode="hidden" />))
+    await act(async () => rerender(<ActivityApp mode="visible" />))
+    expect(replaced.actor).not.toBe(first)
+    expect(screen.getByTestId('child').textContent).toBe('kept00')
   })
 })
