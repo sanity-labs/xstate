@@ -14,7 +14,12 @@ export default defineConfig({
     setupFiles: ['vitest-cleanup-after-each.ts'],
     environment: 'jsdom',
     include: ['src/__tests__/*.test.tsx', 'src/__tests__/upstream/*.test.tsx'],
-    exclude: ['**/dist/**', '**/node_modules/**', 'src/__tests__/browser/**'],
+    exclude: [
+      '**/dist/**',
+      '**/node_modules/**',
+      'src/__tests__/browser/**',
+      'src/__tests__/prototype.bench.test.tsx',
+    ],
     projects: [
       {
         extends: true,

@@ -30,6 +30,22 @@ import {
 
 const RESET = {type: 'xstate.react.reset'} as const
 
+type EffectError = {readonly type: 'xstate.react.effectError'; readonly error: unknown}
+
+function effectError(error: unknown): EffectError {
+  return {type: 'xstate.react.effectError', error}
+}
+
+function isEffectError(event: unknown): event is EffectError {
+  return (
+    !!event &&
+    typeof event === 'object' &&
+    'type' in event &&
+    event.type === 'xstate.react.effectError' &&
+    'error' in event
+  )
+}
+
 type Clock = NonNullable<ActorOptions<AnyActorLogic>['clock']>
 type Dispatch = (event: unknown) => void
 type Effects<TLogic extends AnyActorLogic> = DurableEffect<ExecutableEffectFrom<TLogic>>[]
@@ -57,6 +73,9 @@ class Execution<TLogic extends AnyActorLogic> {
   stopped = false
   private readonly initialEffects: Effects<TLogic>
   private started: Promise<void> | null = null
+  /** Set by the mount effect so initial effects cannot run before stop cleanup is registered. */
+  private enabled = false
+  private resolveEnabled: (() => void) | null = null
   private readonly timers = new Map<string, unknown>()
   private readonly clock: Clock
   private readonly dispatch: () => Dispatch | null
@@ -94,9 +113,33 @@ class Execution<TLogic extends AnyActorLogic> {
     this.initialEffects = initialEffects
   }
 
+  /** Allows `start` to run initial effects. Called from the mount effect before its cleanup is armed. */
+  enable(): void {
+    if (this.enabled) {
+      return
+    }
+    this.enabled = true
+    this.resolveEnabled?.()
+    this.resolveEnabled = null
+  }
+
   start(): Promise<void> {
-    this.started ??= this.durable.executeEffects(this.initialEffects)
+    this.started ??= this.whenEnabled().then(() => {
+      if (this.stopped) {
+        return
+      }
+      return this.durable.executeEffects(this.initialEffects)
+    })
     return this.started
+  }
+
+  private whenEnabled(): Promise<void> {
+    if (this.enabled) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => {
+      this.resolveEnabled = resolve
+    })
   }
 
   async transition(
@@ -195,15 +238,27 @@ class Host<TLogic extends AnyActorLogic> {
   connect(): () => void {
     this.pendingStop?.()
     this.pendingStop = null
+    const dispatch = this.dispatch
     if (this.execution.stopped) {
       // Activity showed the component again after its execution stopped: start over, like a
       // fresh actor would.
-      const dispatch = this.dispatch
       if (dispatch) {
         startTransition(() => dispatch(RESET))
       }
     } else {
-      void this.execution.start()
+      // Enable only once the effect is running so a prior action cannot start children or timers
+      // before this cleanup is registered. Mount failures are fed back through the action queue
+      // so they hit the error boundary like a later send, instead of an unhandled rejection.
+      this.execution.enable()
+      void this.execution.start().catch((error) => {
+        if (this.execution.stopped) {
+          return
+        }
+        const d = this.dispatch
+        if (d) {
+          startTransition(() => d(effectError(error)))
+        }
+      })
     }
     return () => {
       // Stopping waits a microtask so that StrictMode's simulated unmount and remount keeps the
@@ -228,11 +283,15 @@ class Host<TLogic extends AnyActorLogic> {
     prev: DurableSnapshot<TLogic>,
     event: unknown,
   ): Promise<DurableSnapshot<TLogic>> {
+    if (isEffectError(event)) {
+      throw event.error
+    }
     if (event === RESET) {
       if (!this.execution.stopped) {
         return prev
       }
       this.execution = this.createExecution()
+      this.execution.enable()
       await this.execution.start()
       return this.execution.initial
     }
