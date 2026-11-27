@@ -220,13 +220,17 @@ function Filters() {
 
 ### Updates `send` did not cause
 
-Delayed transitions, invoked promises and child actors change the snapshot without a `send`. By default these changes render as transitions too. Pass `updates: 'sync'` to render them as regular updates instead:
+Delayed transitions, invoked promises, child actors and events sent from outside React change the snapshot without a `send`. By default these changes render as transitions too, so they never reveal a transition that is still suspended. The tradeoff: while a transition is suspended, their visible effect waits for it. A toast that a delayed transition hides stays on screen until the suspended transition renders, and then both render together.
+
+Pass `updates: 'sync'` to render them as regular updates instead:
 
 ```tsx
-const [snapshot] = useActor(timerMachine, {updates: 'sync'})
+const [snapshot] = useActor(toastMachine, {updates: 'sync'})
 ```
 
-`send` is a transition either way.
+The toast then hides right away. The snapshot it renders includes the suspended transition's changes too, so a `Suspense` boundary waiting on them shows its fallback.
+
+`send` is a transition either way. After an `await` in an async transition, wrap `send` in `startTransition` again to keep the transition's types.
 
 ## License
 

@@ -5,8 +5,11 @@ import {transition, type AnyActorLogic, type AnyActorRef} from 'xstate'
  * How snapshot changes reach React when nothing wraps them in a transition, such as delayed
  * transitions, invoked actors settling, and events sent with `actor.send` outside `startTransition`.
  *
- * - `'transition'` (default): as transition updates.
- * - `'sync'`: as regular updates, with the priority of whatever caused them.
+ * - `'transition'` (default): as transition updates. They never reveal a transition that is still
+ *   suspended, and their visible effect waits for it.
+ * - `'sync'`: as regular updates, with the priority of whatever caused them. They render right
+ *   away, with the suspended transition's changes, so a `Suspense` boundary waiting on those shows
+ *   its fallback.
  *
  * @public
  */
