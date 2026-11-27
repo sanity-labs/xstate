@@ -17,3 +17,13 @@ cd research && npm install --no-package-lock && node e1-transition-and-mount-tea
 ```
 
 The `.out` files hold stdout only. E3 and E8 also print React's "large number of updates inside startTransition" warning to stderr. On re-runs, every output matches its recording except the E8 time-sliced section, whose commit sequences vary from run to run; one re-run showed a torn commit for `renderRead+subscribe`. `t.mjs` and `probe-effects.mjs` have no recorded output.
+
+## Fate-style reader (PALS-152)
+
+A prototype of fate's `useSnapshot` for an actor: `useSyncExternalStore` over a thenable snapshot, wrapped in `useDeferredValue`, unwrapped with `use()`. It lives in the package so it runs plain and through the React Compiler:
+
+- `packages/xstate-react/src/__tests__/research/fateReader.tsx`: the prototype, and plain uSES of the same thenable as a control.
+- `packages/xstate-react/src/__tests__/research/fateReader.test.tsx`: E1, E3, E6, transition types, React's >10 updates warning and render cost, against `useActor` with a context fan-out. `pnpm test` writes `plain.out` and `compiler.out` to `$FATE_READER_OUT` (default `/tmp/fate-reader`). Recorded: `fate-reader-plain.out`, `fate-reader-compiler.out`.
+- `packages/xstate-react/src/__tests__/browser/fateReader.test.tsx`: E1 and transition types in Chromium with the browser's own view transitions (`pnpm test:browser`).
+
+Result: `useDeferredValue` hides the uSES fallback, but a reader mounting during a pending transition renders the head snapshot (E1), a send blocks the main thread for a sync render of the old values before the transition render (E3 commits `0, 0, 2`; about 53 ms vs 9 ms for `useActor` with 120 readers), every reader renders twice per change, and `addTransitionType` types don't reach `<ViewTransition>` unless another state update shares the transition.

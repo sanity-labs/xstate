@@ -1,0 +1,29 @@
+E1 current | initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B=""
+E1 fate    | initial: A="" results="" | after transition send: A="" results="" | after urgent mount of B: A="" results="" B="a"
+E1 uses    | initial: A="" results="" | after transition send: A="a" results="" [FALLBACK] | after urgent mount of B: A="a" results="" [FALLBACK] B="a"
+E6 current+plainSend     | pending transition: n=0 results=""            | after sync sEv: n=0 results=""
+E6 current+useOptimistic | pending transition: n=0 results=""            | after sync sEv: n=1 results=""
+E6 fate+plainSend        | pending transition: n=0 results=""            | after sync sEv: n=0 results=""
+E6 fate+useOptimistic    | pending transition: n=0 results=""            | after sync sEv: n=1 results=""
+E6 uses+plainSend        | pending transition: n=0 results="" [FALLBACK] | after sync sEv: n=1 results="" [FALLBACK]
+E9 current | view transitions started: 1, types per view transition: [["typing"]] | shown: x
+E9 fate    | view transitions started: 1, types per view transition: [[]] | shown: x
+E9 uses    | view transitions started: 0, types per view transition: [] | shown: x
+E9b current | +setState in transition | view transitions started: 1, types: [["typing"]] | shown: x1
+E9b fate    | +setState in transition | view transitions started: 1, types: [["typing"]] | shown: x1
+E9b uses    | +setState in transition | view transitions started: 1, types: [["typing"]] | shown: x1
+E10 current | 20 readers, send in startTransition: no warning
+E10 fate    | 20 readers, send in startTransition: no warning
+E10 uses    | 20 readers, send in startTransition: no warning
+E3 current  2nd=transition| commits: 1 , 1 , 2        no torn commit | reader renders: 240
+E3 fate     2nd=transition| commits: 0 , 0 , 2        no torn commit | reader renders: 372
+E3 uses     2nd=transition| commits: 1 , 2            no torn commit | reader renders: 240
+E3 current  2nd=urgent    | commits: 1 , 1 , 2        no torn commit | reader renders: 240
+E3 fate     2nd=urgent    | commits: 0 , 0 , 2        no torn commit | reader renders: 372
+E3 uses     2nd=urgent    | commits: 1 , 2            no torn commit | reader renders: 240
+COST2 current | q changes, 120 readers select n | reader function calls: 120 | slow child renders: 0
+COST2 fate    | q changes, 120 readers select n | reader function calls: 240 | slow child renders: 0
+COST2 uses    | q changes, 120 readers select n | reader function calls: 120 | slow child renders: 0
+COST current | one send in startTransition, 120 readers x 0.4ms | reader renders: 120 | commits: 2 | longest main-thread block: 7.9ms | settled after: 61.2ms (medians of 5)
+COST fate    | one send in startTransition, 120 readers x 0.4ms | reader renders: 240 | commits: 2 | longest main-thread block: 52.2ms | settled after: 107.3ms (medians of 5)
+COST uses    | one send in startTransition, 120 readers x 0.4ms | reader renders: 120 | commits: 1 | longest main-thread block: 52.6ms | settled after: 52.8ms (medians of 5)
