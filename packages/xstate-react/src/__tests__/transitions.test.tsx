@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import {describe, expect, it} from 'vitest'
-import {createActor} from 'xstate'
+import {createActor, createMachine, SimulatedClock, types} from 'xstate'
 
 import {useActor, useActorRef, useSelector, useSend, type Updates} from '../index'
 import {counterMachine, deferred, recordViewTransitionTypes} from './helpers'
@@ -235,5 +235,73 @@ describe('updates', () => {
     await act(async () => startTransition(() => app.send({type: 'inc'})))
     expect(screen.getByTestId('count').textContent).toBe('0')
     expect(screen.queryByTestId('fallback')).toBeNull()
+  })
+})
+
+const toastMachine = createMachine({
+  schemas: {context: types<{query: string}>(), events: {search: types<{query: string}>()}},
+  context: {query: ''},
+  initial: 'visible',
+  states: {
+    visible: {after: {1000: {target: 'hidden'}}},
+    hidden: {},
+  },
+  on: {search: ({event}) => ({context: {query: event.query}})},
+})
+
+function Results({query, gate}: {query: string; gate: Promise<void>}) {
+  if (query) {
+    use(gate)
+  }
+  return <p data-testid="query">{query}</p>
+}
+
+function renderToast(updates: Updates) {
+  const gate = deferred()
+  const clock = new SimulatedClock()
+  let send!: ReturnType<typeof useActor<typeof toastMachine>>[1]
+  function Toast() {
+    const [snapshot, _send] = useActor(toastMachine, {clock, updates})
+    useLayoutEffect(() => {
+      send = _send
+    })
+    return (
+      <>
+        <p data-testid="toast">{snapshot.value}</p>
+        <Suspense fallback={<p data-testid="fallback" />}>
+          <Results query={snapshot.context.query} gate={gate.promise} />
+        </Suspense>
+      </>
+    )
+  }
+  render(<Toast />)
+  return {gate, clock, send: (...args: Parameters<typeof send>) => send(...args)}
+}
+
+describe('a timer firing while a transition is suspended', () => {
+  it('waits behind the transition by default, and renders with it', async () => {
+    const {gate, clock, send} = renderToast('transition')
+
+    await act(async () => startTransition(() => send({type: 'search', query: 'x'})))
+    await act(async () => clock.increment(1000))
+    expect(screen.getByTestId('toast').textContent).toBe('visible')
+    expect(screen.getByTestId('query').textContent).toBe('')
+    expect(screen.queryByTestId('fallback')).toBeNull()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('toast').textContent).toBe('hidden')
+    expect(screen.getByTestId('query').textContent).toBe('x')
+  })
+
+  it("renders right away with `updates: 'sync'`, revealing the suspended transition's snapshot", async () => {
+    const {gate, clock, send} = renderToast('sync')
+
+    await act(async () => startTransition(() => send({type: 'search', query: 'x'})))
+    await act(async () => clock.increment(1000))
+    expect(screen.getByTestId('toast').textContent).toBe('hidden')
+    expect(screen.getByTestId('fallback')).toBeTruthy()
+
+    await act(async () => gate.resolve())
+    expect(screen.getByTestId('query').textContent).toBe('x')
   })
 })
