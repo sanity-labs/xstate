@@ -135,6 +135,9 @@ class Execution<TLogic extends AnyActorLogic> {
   }
 
   private scheduleTimer(source: AnyActor, timer: TimerKey, delay: number): void {
+    if (this.stopped) {
+      return
+    }
     const key = timerKey(addressOf(source), timer)
     this.clearTimer(key)
     this.timers.set(
