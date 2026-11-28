@@ -15,7 +15,8 @@ const config: KnipConfig = {
       ignoreDependencies: ['tailwindcss', 'tw-animate-css'],
     },
     'packages/xstate-react': {
-      entry: ['src/index.ts'],
+      // rtl-shim.tsx is the vitest alias for @testing-library/react when VITE_XSTATE_REACT_IMPL=rcsx.
+      entry: ['src/index.ts', 'src/rcs/rtl-shim.tsx'],
       project: ['src/**/*.{ts,tsx}', '*.ts'],
     },
   },
